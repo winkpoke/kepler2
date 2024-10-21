@@ -31,8 +31,7 @@ impl Texture {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D3,
-                // format: wgpu::TextureFormat::Rg8Unorm,
-                format: wgpu::TextureFormat::Rgba8Unorm,
+                format: wgpu::TextureFormat::Rg8Unorm,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             }
@@ -48,8 +47,7 @@ impl Texture {
             bytes,
             wgpu::ImageDataLayout {
                 offset: 0,
-                // bytes_per_row: Some(2 * width),
-                bytes_per_row: Some(4 * width),
+                bytes_per_row: Some(2 * width),
                 rows_per_image: Some(height),
             },
             size,
@@ -74,10 +72,10 @@ impl Texture {
     pub fn from_file_at_compile_time(device: &wgpu::Device, queue: &wgpu::Queue, label: &str, width: u32, height: u32, depth: u32) -> Result<Self> {
         // Load the binary texture file
         let bytes = include_bytes!("../image/combined_pixel_array3.bin");
-        let bytes_u16: &[u16] = bytemuck::cast_slice(bytes);
-        let bytes_u32: Vec<u32> = bytes_u16.iter().map(|&v| v as u32).collect();
-        let bytes_u8: &[u8] = bytemuck::cast_slice(&bytes_u32);
-        println!("len: {}", bytes_u8.len());
-        Self::from_bytes(device, queue, &bytes_u8[0..1048576], label, width, height, depth)
+        // let bytes_u16: &[u16] = bytemuck::cast_slice(bytes);
+        // let bytes_u32: Vec<u32> = bytes_u16.iter().map(|&v| v as u32).collect();
+        // let bytes_u8: &[u8] = bytemuck::cast_slice(&bytes_u32);
+        // println!("len: {}", bytes_u8.len());
+        Self::from_bytes(device, queue, bytes, label, width, height, depth)
     }
 }

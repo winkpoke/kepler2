@@ -76,13 +76,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let depth = u_uniform_frag.slice; // Ensure this is set correctly
     let tex_coords_3d = vec3<f32>(in.tex_coords, depth);
 
-    // let sampled_value: vec4<f32> = textureSample(t_diffuse, s_diffuse, tex_coords_3d);
+    let sampled_value: vec4<f32> = textureSample(t_diffuse, s_diffuse, tex_coords_3d);
 
-    // // Unpack the two unsigned bytes back to a signed int16
-    // let unpacked_value: f32 = (sampled_value.g * 256.0 + sampled_value.r) * 255.0;
+    // Unpack the two unsigned bytes back to a signed int16
+    let unpacked_value: f32 = (sampled_value.g * 256.0 + sampled_value.r) * 255.0;
 
-    // let v: f32 = clamp((unpacked_value - (u_uniform_frag.level - u_uniform_frag.window / 2.0)) / u_uniform_frag.window, 0.0, 1.0);
+    let v: f32 = clamp((unpacked_value - (u_uniform_frag.level - u_uniform_frag.window / 2.0)) / u_uniform_frag.window, 0.0, 1.0);
 
-    // // return vec4<f32>(vec3<f32>(v), 1.0);
-    return textureSample(t_diffuse, s_diffuse, tex_coords_3d);
+    return vec4<f32>(vec3<f32>(v), 1.0);
+    // return textureSample(t_diffuse, s_diffuse, tex_coords_3d);
 }

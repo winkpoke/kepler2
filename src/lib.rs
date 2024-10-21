@@ -143,7 +143,10 @@ impl<'a> State<'a> {
                     // WebGL doesn't support all of wgpu's features, so if
                     // we're building for the web we'll have to disable some.
                     required_limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
+                        wgpu::Limits {
+                            max_texture_dimension_3d: 1024,
+                            ..wgpu::Limits::downlevel_webgl2_defaults()
+                        }
                     } else {
                         wgpu::Limits::default()
                     },
@@ -180,13 +183,13 @@ impl<'a> State<'a> {
         println!("print size: {}, {}", size.width, size.height);
         // surface.configure(&device, &config);
 
-        let diffuse_bytes =
-            include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
+        // let diffuse_bytes =
+        //     include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
             // include_bytes!("../image/CT.png");
-        println!("len = {}", diffuse_bytes.len());
+        // println!("len = {}", diffuse_bytes.len());
         let diffuse_texture =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
-            // texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 1).unwrap();
+            // texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
+            texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 10).unwrap();
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
