@@ -10,7 +10,7 @@ use winit::{
 };
 
 mod texture;
-mod texture3D;
+mod texture_3d;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -120,6 +120,7 @@ impl<'a> State<'a> {
             backends: wgpu::Backends::DX12,
             #[cfg(target_arch = "wasm32")]
             backends: wgpu::Backends::GL,
+            // backends: wgpu::BROWSER_WEBGPU,
             ..Default::default()
         });
 
@@ -133,7 +134,7 @@ impl<'a> State<'a> {
             })
             .await
             .unwrap();
-
+        
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -176,13 +177,16 @@ impl<'a> State<'a> {
         };
 
         error!("size: {}, {}", size.width, size.height);
+        println!("print size: {}, {}", size.width, size.height);
         // surface.configure(&device, &config);
 
         let diffuse_bytes =
-            // include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
-            include_bytes!("../image/CT.png");
+            include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
+            // include_bytes!("../image/CT.png");
+        println!("len = {}", diffuse_bytes.len());
         let diffuse_texture =
             texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
+            // texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 1).unwrap();
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -191,7 +195,8 @@ impl<'a> State<'a> {
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
+                            // view_dimension: wgpu::TextureViewDimension::D2,
+                            view_dimension: wgpu::TextureViewDimension::D3,
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         },
                         count: None,
@@ -267,7 +272,8 @@ impl<'a> State<'a> {
         // Create a bind group for the uniform buffer in fragment shader
         let uniform_frag_data = UniformsFrag {
             window: 350.,
-            level: 40.,
+            level: 1140.,
+            // level: 240.,
             slice: 0.0,
             ..Default::default()
         };
@@ -417,16 +423,21 @@ impl<'a> State<'a> {
 
     fn update(&mut self) {
         // Update the rotation angle, e.g., incrementing it over time
-        self.rotation_angle_y += 0.01; // Update rotation angle
-        self.rotation_angle_z += 0.01; // Update rotation angle
-        let uniforms = Uniforms {
-            rotation_angle_y: self.rotation_angle_y,
-            rotation_angle_z: self.rotation_angle_z,
-            ..Default::default()
-        };
+        // self.rotation_angle_y += 0.01; // Update rotation angle
+        // self.rotation_angle_z += 0.01; // Update rotation angle
+        // let uniforms = Uniforms {
+        //     rotation_angle_y: self.rotation_angle_y,
+        //     rotation_angle_z: self.rotation_angle_z,
+        //     ..Default::default()
+        // };
+        if self.uniform_frag_data.slice >= 1.0 {
+            self.uniform_frag_data.slice = 0.0;
+        } else {
+            self.uniform_frag_data.slice += 0.001;
+        }
 
-        self.queue
-            .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+        // self.queue
+            // .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         self.queue
             .write_buffer(&self.uniform_frag_buffer, 0, bytemuck::cast_slice(&[self.uniform_frag_data]));
     }
