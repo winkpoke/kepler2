@@ -10,7 +10,7 @@ use winit::{
 };
 
 mod texture;
-mod texture3D;
+mod texture_3d;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -40,9 +40,6 @@ struct Vertex {
     // color: [f32; 3],
     tex_coords: [f32; 2],
 }
-
-// unsafe impl bytemuck::Pod for Vertex {}
-// unsafe impl bytemuck::Zeroable for Vertex {}
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 2] =
@@ -103,8 +100,7 @@ struct State<'a> {
     uniform_bind_group: wgpu::BindGroup,
     uniform_frag_buffer: wgpu::Buffer,
     uniform_frag_bind_group: wgpu::BindGroup,
-    rotation_angle_y: f32,
-    rotation_angle_z: f32,
+    uniform_vert_data: Uniforms,
     uniform_frag_data: UniformsFrag,
 }
 
@@ -120,6 +116,7 @@ impl<'a> State<'a> {
             backends: wgpu::Backends::DX12,
             #[cfg(target_arch = "wasm32")]
             backends: wgpu::Backends::GL,
+            // backends: wgpu::BROWSER_WEBGPU,
             ..Default::default()
         });
 
@@ -133,7 +130,7 @@ impl<'a> State<'a> {
             })
             .await
             .unwrap();
-
+        
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -142,7 +139,10 @@ impl<'a> State<'a> {
                     // WebGL doesn't support all of wgpu's features, so if
                     // we're building for the web we'll have to disable some.
                     required_limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
+                        wgpu::Limits {
+                            max_texture_dimension_3d: 1024,
+                            ..wgpu::Limits::downlevel_webgl2_defaults()
+                        }
                     } else {
                         wgpu::Limits::default()
                     },
@@ -176,13 +176,18 @@ impl<'a> State<'a> {
         };
 
         error!("size: {}, {}", size.width, size.height);
-        // surface.configure(&device, &config);
+        println!("print size: {}, {}", size.width, size.height);
+        if size.width > 0 && size.height > 0 {
+            surface.configure(&device, &config);
+        }
 
-        let diffuse_bytes =
-            // include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
-            include_bytes!("../image/CT.png");
+        // let diffuse_bytes =
+        //     include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
+            // include_bytes!("../image/CT.png");
+        // println!("len = {}", diffuse_bytes.len());
         let diffuse_texture =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
+            // texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
+            texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 10).unwrap();
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -191,7 +196,8 @@ impl<'a> State<'a> {
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
+                            // view_dimension: wgpu::TextureViewDimension::D2,
+                            view_dimension: wgpu::TextureViewDimension::D3,
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         },
                         count: None,
@@ -222,17 +228,14 @@ impl<'a> State<'a> {
             label: Some("diffuse_bind_group"),
         });
 
-        let rotation_angle_y = 0.0;
-        let rotation_angle_z = 0.0;
-
-        let uniform_data = Uniforms {
+        let uniform_vert_data = Uniforms {
             rotation_angle_y: 0.0,
             rotation_angle_z: 0.0,
             ..Default::default()
         };
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[uniform_data]),
+            contents: bytemuck::cast_slice(&[uniform_vert_data]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -267,7 +270,8 @@ impl<'a> State<'a> {
         // Create a bind group for the uniform buffer in fragment shader
         let uniform_frag_data = UniformsFrag {
             window: 350.,
-            level: 40.,
+            level: 1140.,
+            // level: 240.,
             slice: 0.0,
             ..Default::default()
         };
@@ -391,8 +395,7 @@ impl<'a> State<'a> {
             uniform_bind_group,
             uniform_frag_buffer,
             uniform_frag_bind_group,
-            rotation_angle_y,
-            rotation_angle_z,
+            uniform_vert_data,
             uniform_frag_data,
         }
     }
@@ -417,16 +420,16 @@ impl<'a> State<'a> {
 
     fn update(&mut self) {
         // Update the rotation angle, e.g., incrementing it over time
-        self.rotation_angle_y += 0.01; // Update rotation angle
-        self.rotation_angle_z += 0.01; // Update rotation angle
-        let uniforms = Uniforms {
-            rotation_angle_y: self.rotation_angle_y,
-            rotation_angle_z: self.rotation_angle_z,
-            ..Default::default()
-        };
+        self.uniform_vert_data.rotation_angle_y += 0.01; // Update rotation angle
+        self.uniform_vert_data.rotation_angle_z += 0.01; // Update rotation angle
+        if self.uniform_frag_data.slice >= 1.0 {
+            self.uniform_frag_data.slice = 0.0;
+        } else {
+            self.uniform_frag_data.slice += 0.005;
+        }
 
         self.queue
-            .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+            .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[self.uniform_vert_data]));
         self.queue
             .write_buffer(&self.uniform_frag_buffer, 0, bytemuck::cast_slice(&[self.uniform_frag_data]));
     }
@@ -451,9 +454,9 @@ impl<'a> State<'a> {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.2,
-                            g: 0.3,
-                            b: 0.4,
+                            r: 0.5,
+                            g: 0.5,
+                            b: 0.5,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
