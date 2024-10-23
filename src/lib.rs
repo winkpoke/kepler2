@@ -467,6 +467,15 @@ impl<'a> State<'a> {
                 timestamp_writes: None,
             });
             render_pass.set_pipeline(&self.render_pipeline); // 2.
+            render_pass.set_viewport(0.0, 0.0, 800.0, 800.0, 0.0, 1.0);
+            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.uniform_frag_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+
+            render_pass.set_viewport(800.0, 0.0, 800.0, 800.0, 0.0, 1.0);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
             render_pass.set_bind_group(2, &self.uniform_frag_bind_group, &[]);
@@ -513,11 +522,11 @@ pub async fn run() {
             })
             .expect("Couldn't append canvas to document body.");
 
-        let _ = window.request_inner_size(PhysicalSize::new(800, 800));
+        let _ = window.request_inner_size(PhysicalSize::new(1600, 800));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    let _ = window.request_inner_size(PhysicalSize::new(800, 800));
+    let _ = window.request_inner_size(PhysicalSize::new(1600, 800));
 
     // State::new uses async code, so we're going to wait for it to finish
     let mut state = State::new(&window).await;
