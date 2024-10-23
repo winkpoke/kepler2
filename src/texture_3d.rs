@@ -6,6 +6,7 @@ pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
+    pub texture_format: wgpu::TextureFormat,
 }
 
 impl Texture {
@@ -19,6 +20,7 @@ impl Texture {
         height: u32,
         depth: u32,
     ) -> Result<Self> {
+        let texture_format = wgpu::TextureFormat::Rg8Unorm;
         let size = wgpu::Extent3d {
             width,
             height,
@@ -31,7 +33,7 @@ impl Texture {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D3,
-                format: wgpu::TextureFormat::Rg8Unorm,
+                format: texture_format,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             }
@@ -65,7 +67,7 @@ impl Texture {
                 ..Default::default()
             }
         );
-        Ok(Self { texture, view, sampler })
+        Ok(Self { texture, view, sampler, texture_format })
     }
 
     // Function to read a 3D texture from a file at compile time
