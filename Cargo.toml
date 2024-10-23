@@ -37,3 +37,7 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Element",
 ]}
+
+[[bin]]
+name = "kepler"
+path = "src/main.rs"
