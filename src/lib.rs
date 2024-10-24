@@ -12,6 +12,7 @@ use winit::{
 // mod texture;
 mod texture_3d;
 mod view;
+mod view2;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -29,6 +30,7 @@ struct State<'a> {
     window: &'a Window,
     texture: texture_3d::Texture,
     transverse_view: view::TransverseView,
+    view2: view2::TransverseView2,
 }
 
 impl<'a> State<'a> {
@@ -122,6 +124,8 @@ impl<'a> State<'a> {
         println!("format: {:?}", config.format);
         let transverse_view = view::TransverseView::new(&device, &texture);
 
+        let view2 = view2::TransverseView2::new(&device, &texture);
+
         Self {
             surface,
             device,
@@ -131,6 +135,7 @@ impl<'a> State<'a> {
             window,
             texture,
             transverse_view,
+            view2,
         }
     }
 
@@ -154,6 +159,7 @@ impl<'a> State<'a> {
 
     fn update(&mut self) {
         self.transverse_view.update(&self.queue);
+        self.view2.update(&self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -167,6 +173,7 @@ impl<'a> State<'a> {
                 label: Some("Render Encoder"),
             });
         self.transverse_view.render(&mut encoder, &frame_view)?;
+        self.view2.render(&mut encoder, &frame_view)?;
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();

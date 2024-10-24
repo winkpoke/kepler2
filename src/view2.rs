@@ -65,7 +65,7 @@ const VERTICES: &[Vertex] = &[
 ];
 
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
-pub struct TransverseView {
+pub struct TransverseView2 {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     // num_vertices: u32,
@@ -81,8 +81,8 @@ pub struct TransverseView {
     uniform_frag_data: UniformsFrag,
 }
 
-impl TransverseView {
-    pub fn new(device: &wgpu::Device, texture: &Texture) -> TransverseView {
+impl TransverseView2 {
+    pub fn new(device: &wgpu::Device, texture: &Texture) -> TransverseView2 {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -290,8 +290,8 @@ impl TransverseView {
 
     pub fn update(&mut self, queue: &wgpu::Queue) {
         // Update the rotation angle, e.g., incrementing it over time
-        self.uniform_vert_data.rotation_angle_y += 0.01; // Update rotation angle
-        self.uniform_vert_data.rotation_angle_z += 0.01; // Update rotation angle
+        self.uniform_vert_data.rotation_angle_y -= 0.01; // Update rotation angle
+        self.uniform_vert_data.rotation_angle_z -= 0.01; // Update rotation angle
         if self.uniform_frag_data.slice >= 1.0 {
             self.uniform_frag_data.slice = 0.0;
         } else {
@@ -313,12 +313,7 @@ impl TransverseView {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.5,
-                            g: 0.5,
-                            b: 0.5,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -327,7 +322,7 @@ impl TransverseView {
                 timestamp_writes: None,
             });
             render_pass.set_pipeline(&self.render_pipeline); // 2.
-            render_pass.set_viewport(0.0, 0.0, 800.0, 800.0, 0.0, 1.0);
+            render_pass.set_viewport(800.0, 0.0, 800.0, 800.0, 0.0, 1.0);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
             render_pass.set_bind_group(2, &self.uniform_frag_bind_group, &[]);
