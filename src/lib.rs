@@ -9,14 +9,94 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+use view::Renderable;
+
 // mod texture;
 mod texture_3d;
 mod view;
-mod view2;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+struct TransverseView {
+    view: view::View,
+}
+
+impl view::Renderable for TransverseView {
+    fn update(&mut self, queue: &wgpu::Queue) {
+        // Update the rotation angle, e.g., incrementing it over time
+        self.view.uniforms.vert.rotation_angle_y += 0.01; // Update rotation angle
+        self.view.uniforms.vert.rotation_angle_z += 0.01; // Update rotation angle
+        if self.view.uniforms.frag.slice >= 1.0 {
+            self.view.uniforms.frag.slice = 0.0;
+        } else {
+            self.view.uniforms.frag.slice += 0.005;
+        }
+
+        queue.write_buffer(
+            &self.view.uniform_vert_buffer,
+            0,
+            bytemuck::cast_slice(&[self.view.uniforms.vert]),
+        );
+        queue.write_buffer(
+            &self.view.uniform_frag_buffer,
+            0,
+            bytemuck::cast_slice(&[self.view.uniforms.frag]),
+        );
+    }
+
+    fn render(&mut self, render_pass: &mut wgpu::RenderPass) -> Result<(), wgpu::SurfaceError> {
+        render_pass.set_pipeline(&self.view.render_pipeline); // 2.
+        render_pass.set_viewport(0.0, 0.0, 800.0, 800.0, 0.0, 1.0);
+        render_pass.set_bind_group(0, &self.view.texture_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.view.uniform_vert_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.view.uniform_frag_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.view.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.view.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.view.num_indices, 0, 0..1);
+        Ok(())
+    }
+}
+
+struct SagittalView {
+    view: view::View,
+}
+
+impl view::Renderable for SagittalView {
+    fn update(&mut self, queue: &wgpu::Queue) {
+        // Update the rotation angle, e.g., incrementing it over time
+        self.view.uniforms.vert.rotation_angle_y -= 0.01; // Update rotation angle
+        self.view.uniforms.vert.rotation_angle_z -= 0.01; // Update rotation angle
+        if self.view.uniforms.frag.slice <= 0.0 {
+            self.view.uniforms.frag.slice = 1.0;
+        } else {
+            self.view.uniforms.frag.slice -= 0.01;
+        }
+
+        queue.write_buffer(
+            &self.view.uniform_vert_buffer,
+            0,
+            bytemuck::cast_slice(&[self.view.uniforms.vert]),
+        );
+        queue.write_buffer(
+            &self.view.uniform_frag_buffer,
+            0,
+            bytemuck::cast_slice(&[self.view.uniforms.frag]),
+        );
+    }
+
+    fn render(&mut self, render_pass: &mut wgpu::RenderPass) -> Result<(), wgpu::SurfaceError> {
+        render_pass.set_pipeline(&self.view.render_pipeline); // 2.
+        render_pass.set_viewport(800.0, 0.0, 800.0, 800.0, 0.0, 1.0);
+        render_pass.set_bind_group(0, &self.view.texture_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.view.uniform_vert_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.view.uniform_frag_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.view.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.view.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.view.num_indices, 0, 0..1);
+        Ok(())
+    }
+}
 
 struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -29,8 +109,8 @@ struct State<'a> {
     // unsafe references to the window's resources.
     window: &'a Window,
     texture: texture_3d::Texture,
-    transverse_view: view::TransverseView,
-    view2: view2::TransverseView2,
+    transverse_view: TransverseView,
+    sagittal_view: SagittalView,
 }
 
 impl<'a> State<'a> {
@@ -59,7 +139,7 @@ impl<'a> State<'a> {
             })
             .await
             .unwrap();
-        
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -114,7 +194,7 @@ impl<'a> State<'a> {
 
         // let diffuse_bytes =
         //     include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
-            // include_bytes!("../image/CT.png");
+        // include_bytes!("../image/CT.png");
         // println!("len = {}", diffuse_bytes.len());
         let texture =
             // texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
@@ -122,9 +202,13 @@ impl<'a> State<'a> {
 
         println!("supported texture formats: {:?}", surface_caps.formats);
         println!("format: {:?}", config.format);
-        let transverse_view = view::TransverseView::new(&device, &texture);
-
-        let view2 = view2::TransverseView2::new(&device, &texture);
+        let wgsl_path: &str = include_str!("shader/shader_tex.wgsl");
+        let transverse_view = TransverseView {
+            view: view::View::new(&device, &texture, wgsl_path),
+        };
+        let sagittal_view = SagittalView {
+            view: view::View::new(&device, &texture, wgsl_path),
+        };
 
         Self {
             surface,
@@ -135,7 +219,7 @@ impl<'a> State<'a> {
             window,
             texture,
             transverse_view,
-            view2,
+            sagittal_view,
         }
     }
 
@@ -159,7 +243,7 @@ impl<'a> State<'a> {
 
     fn update(&mut self) {
         self.transverse_view.update(&self.queue);
-        self.view2.update(&self.queue);
+        self.sagittal_view.update(&self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -168,13 +252,34 @@ impl<'a> State<'a> {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self.device
+        let mut encoder = self
+            .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
-        self.transverse_view.render(&mut encoder, &frame_view)?;
-        self.view2.render(&mut encoder, &frame_view)?;
-
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &frame_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.5,
+                            g: 0.5,
+                            b: 0.5,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            self.transverse_view.render(&mut render_pass)?;
+            self.sagittal_view.render(&mut render_pass)?;
+        }
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
 
