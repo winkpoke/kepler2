@@ -20,17 +20,31 @@ use wasm_bindgen::prelude::*;
 
 struct TransverseView {
     view: view::View,
+    r_speed: f32,
+    s_speed: f32,
+    idx: i32,
+}
+
+impl TransverseView {
+    pub fn new(view: view::View, idx: i32, r_speed: f32, s_speed: f32) -> Self {
+        Self {
+            view,
+            r_speed,
+            s_speed,
+            idx,
+        }
+    }
 }
 
 impl view::Renderable for TransverseView {
     fn update(&mut self, queue: &wgpu::Queue) {
         // Update the rotation angle, e.g., incrementing it over time
-        self.view.uniforms.vert.rotation_angle_y += 0.01; // Update rotation angle
-        self.view.uniforms.vert.rotation_angle_z += 0.01; // Update rotation angle
+        self.view.uniforms.vert.rotation_angle_y += self.r_speed; //0.05; // Update rotation angle
+        self.view.uniforms.vert.rotation_angle_z += self.r_speed; //0.05; // Update rotation angle
         if self.view.uniforms.frag.slice >= 1.0 {
             self.view.uniforms.frag.slice = 0.0;
         } else {
-            self.view.uniforms.frag.slice += 0.005;
+            self.view.uniforms.frag.slice += self.s_speed; //0.005;
         }
 
         queue.write_buffer(
@@ -47,7 +61,9 @@ impl view::Renderable for TransverseView {
 
     fn render(&mut self, render_pass: &mut wgpu::RenderPass) -> Result<(), wgpu::SurfaceError> {
         render_pass.set_pipeline(&self.view.render_pipeline); // 2.
-        render_pass.set_viewport(0.0, 0.0, 800.0, 800.0, 0.0, 1.0);
+        let x: f32 = (self.idx % (800 / 200))  as f32 * 200.0;
+        let y: f32 = (self.idx / (800 / 200)) as f32 * 200.0;
+        render_pass.set_viewport(x, y, 200.0, 200.0, 0.0, 1.0);
         render_pass.set_bind_group(0, &self.view.texture_bind_group, &[]);
         render_pass.set_bind_group(1, &self.view.uniform_vert_bind_group, &[]);
         render_pass.set_bind_group(2, &self.view.uniform_frag_bind_group, &[]);
@@ -109,8 +125,8 @@ struct State<'a> {
     // unsafe references to the window's resources.
     window: &'a Window,
     texture: texture_3d::Texture,
-    transverse_view: TransverseView,
-    sagittal_view: SagittalView,
+    transverse_view: Vec<TransverseView>,
+    // sagittal_view: SagittalView,
 }
 
 impl<'a> State<'a> {
@@ -202,13 +218,20 @@ impl<'a> State<'a> {
 
         println!("supported texture formats: {:?}", surface_caps.formats);
         println!("format: {:?}", config.format);
-        let wgsl_path: &str = include_str!("shader/shader_tex.wgsl");
-        let transverse_view = TransverseView {
-            view: view::View::new(&device, &texture, wgsl_path),
-        };
-        let sagittal_view = SagittalView {
-            view: view::View::new(&device, &texture, wgsl_path),
-        };
+        let mut transverse_view = Vec::<TransverseView>::new();
+        for i in 0..16 {
+            let wgsl_path: &str = include_str!("shader/shader_tex.wgsl");
+            let view = TransverseView::new(
+                view::View::new(&device, &texture, wgsl_path),
+                i,
+                0.0,
+                0.005 * (i as f32) / 2.0,
+            );
+            transverse_view.push(view);
+        }
+        // let sagittal_view = SagittalView {
+        //     view: view::View::new(&device, &texture, wgsl_path),
+        // };
 
         Self {
             surface,
@@ -219,7 +242,7 @@ impl<'a> State<'a> {
             window,
             texture,
             transverse_view,
-            sagittal_view,
+            // sagittal_view,
         }
     }
 
@@ -242,8 +265,10 @@ impl<'a> State<'a> {
     }
 
     fn update(&mut self) {
-        self.transverse_view.update(&self.queue);
-        self.sagittal_view.update(&self.queue);
+        for i in 0..16 {
+            self.transverse_view[i].update(&self.queue);
+        }
+        // self.sagittal_view.update(&self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -277,8 +302,10 @@ impl<'a> State<'a> {
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
-            self.transverse_view.render(&mut render_pass)?;
-            self.sagittal_view.render(&mut render_pass)?;
+            for i in 0..16 {
+                self.transverse_view[i].render(&mut render_pass)?;
+            }
+            // self.sagittal_view.render(&mut render_pass)?;
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
@@ -318,11 +345,11 @@ pub async fn run() {
             })
             .expect("Couldn't append canvas to document body.");
 
-        let _ = window.request_inner_size(PhysicalSize::new(1600, 800));
+        let _ = window.request_inner_size(PhysicalSize::new(800, 800));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    let _ = window.request_inner_size(PhysicalSize::new(1600, 800));
+    let _ = window.request_inner_size(PhysicalSize::new(800, 800));
 
     // State::new uses async code, so we're going to wait for it to finish
     let mut state = State::new(&window).await;
