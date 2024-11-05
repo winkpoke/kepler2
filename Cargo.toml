@@ -15,6 +15,7 @@ pollster = "0.3"
 # data type cast
 bytemuck = { version = "1.16", features = [ "derive" ] }
 cfg-if = "1"
+num = "0.4"
 
 cgmath = "0.18"
 anyhow = "1.0"
