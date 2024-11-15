@@ -1,6 +1,10 @@
 use kepler_wgpu::{coordinates, run};
 
-fn main() {
+#[cfg(target_arch = "wasm32")]
+use kepler_wgpu::dicom_::read_dicom;
+
+#[tokio::main]
+async fn main() {
     let m = [1., 0.5, 0., 0., 
              0., 1., 0., 0., 
              0., 0., 1., 0., 
@@ -18,5 +22,6 @@ fn main() {
     };
 
     println!("{:?}", base0.to_base(&base1));
-    pollster::block_on(run());
+    // pollster::block_on(run());
+    run().await;
 }

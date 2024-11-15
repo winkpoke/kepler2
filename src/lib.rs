@@ -1,5 +1,5 @@
-use log::{debug, error, info};
-use std::iter;
+use log::{debug, error, info, warn};
+use std::{iter, sync::Arc};
 // use wgpu::util::DeviceExt;
 use winit::{
     dpi::PhysicalSize,
@@ -17,6 +17,28 @@ use view::TransverseView;
 mod texture_3d;
 mod view;
 pub mod coordinates;
+pub mod dicom;
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::io;
+
+fn list_files_in_directory(dir: &str) -> io::Result<Vec<PathBuf>> {
+    let mut file_paths = Vec::new();
+
+    // Open the directory and iterate over its contents
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?; // unwrap the result of read_dir
+        let path = entry.path();
+
+        // Check if the entry is a file (not a directory)
+        if path.is_file() {
+            file_paths.push(path); // Add the full path to the list
+        }
+    }
+
+    Ok(file_paths)
+}
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -266,8 +288,19 @@ pub async fn run() {
         }
     }
 
+    warn!("Start the program ...");
+    let rst = crate::dicom::read_dicom();
+    if let Err(err) = rst {
+        error!("{:?}", err);
+    }
+
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+    let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
+
+    let process_fn = Arc::new(dicom::fileio::process);
+    dicom::fileio::read_and_process_files(file_names, process_fn).await.unwrap();
 
     #[cfg(target_arch = "wasm32")]
     {

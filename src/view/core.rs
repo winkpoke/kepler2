@@ -210,7 +210,8 @@ impl View {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(wgsl_path.into()),
+            source: wgpu::ShaderSource::Wgsl(wgsl_path.into()), // with source
+            // source: wgpu::ShaderSource::Wgsl(wgpu::include_wgsl!(wgsl_path)), // without source, safer
         });
 
         //wgpu::include_wgsl!(wgsl_path));
