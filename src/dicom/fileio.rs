@@ -1,113 +1,94 @@
-use std::path::PathBuf;
-use tokio::fs::File;
-use tokio::io::{self, AsyncReadExt};
-use tokio::task;
-use std::sync::Arc;
+use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
+use tokio::fs::{self, File};
+use tokio::io::AsyncReadExt;
+use tokio::sync::Mutex;
+use anyhow::Result;
 
-pub async fn read_and_process_files<F, E>(file_paths: Vec<PathBuf>, process: Arc<F>) -> io::Result<()>
-where
-    F: Fn(Vec<u8>) -> Result<(), E> + Send + Sync + 'static,
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let mut tasks = Vec::new();
+use super::*;
 
+/// Parses a list of DICOM files asynchronously and constructs a `DicomRepo`.
+/// 
+/// # Arguments
+/// - `file_paths`: A vector of file paths to DICOM files.
+/// - `callback`: A function to call with the constructed `DicomRepo`.
+pub async fn parse_dcm_directories(
+    directories: Vec<&str>,
+) -> Result<DicomRepo> {
+    // Shared repository and counter tracker
+    let repo = Arc::new(Mutex::new(DicomRepo::new()));
+    let count = Arc::new(AtomicUsize::new(0));
+
+    let mut file_paths = Vec::new();
+
+    // Collect all files from the provided directories
+    for dir_path in directories {
+        let mut entries = fs::read_dir(dir_path).await.map_err(|err| {
+            eprintln!("Error reading directory {}: {}", dir_path, err);
+            anyhow::Error::new(err)
+        })?;
+
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            if path.is_file() {
+                file_paths.push(path);
+            }
+        }
+    }
+
+    // Process files concurrently
+    let mut tasks = vec![];
     for file_path in file_paths {
-        let process = Arc::clone(&process);
-        
-        let task = task::spawn(async move {
-            let mut file = File::open(&file_path).await?;
-            let mut contents = Vec::new();
-            file.read_to_end(&mut contents).await?;
-            
-            // Call the process function and handle any error it returns
-            process(contents).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let repo_clone = Arc::clone(&repo);
+        let count_clone = Arc::clone(&count);
 
-            Ok::<(), io::Error>(())
+        let task: tokio::task::JoinHandle<Result<(), anyhow::Error>> = tokio::spawn(async move {
+            // Open the file asynchronously
+            let mut file = File::open(&file_path).await.map_err(|err| {
+                eprintln!("Error opening file {}: {}", file_path.display(), err);
+                anyhow::Error::new(err)
+            })?;
+
+            // Read the file contents into a buffer
+            let mut buffer = vec![];
+            file.read_to_end(&mut buffer).await.map_err(|err| {
+                eprintln!("Error reading file {}: {}", file_path.display(), err);
+                anyhow::Error::new(err)
+            })?;
+
+            // Parse the DICOM data and update the repository
+            {
+                let mut repo = repo_clone.lock().await;
+                if let Ok(patient) = Patient::from_file(&buffer) {
+                    repo.add_patient(patient);
+                }
+                if let Ok(study) = StudySet::from_file(&buffer) {
+                    repo.add_study(study);
+                }
+                if let Ok(series) = ImageSeries::from_file(&buffer) {
+                    repo.add_image_series(series);
+                }
+                if let Ok(ct_image) = CTImage::from_file(&buffer) {
+                    repo.add_ct_image(ct_image);
+                }
+            }
+
+            count_clone.fetch_add(1, Ordering::SeqCst);
+            Ok(())
         });
 
         tasks.push(task);
     }
 
-    // Await all tasks and propagate errors if any occur
+    // Wait for all tasks to complete
     for task in tasks {
-        task.await??;
-    }
-
-    Ok(())
-}
-
-use std::io::Cursor;
-use std::borrow::Cow;
-// use bytemuck::cast_slice;
-use bytemuck::checked::try_cast_slice;  
-use dicom_core::Tag;
-use dicom_object::{from_reader, InMemDicomObject};
-
-/// Retrieve a DICOM element as a string.
-fn get_element_as_str<'a>(dcm: &'a InMemDicomObject, name: &str) -> Result<Cow<'a, str>, &'static str> {
-    match dcm.element_by_name(name) {
-        Ok(ele) => ele.to_str().map(Cow::from).map_err(|_| "Error converting element to string"),
-        Err(_) => Err("Error accessing element by name"),
-    }
-}
-
-/// Retrieve pixel data as a slice of i16, if available.
-fn get_pixel_data<'a>(dcm: &'a InMemDicomObject) -> Result<Cow<'a, [i16]>, &'static str> {
-    match dcm.element(Tag(0x7FE0, 0x0010)) {
-        Ok(ele) => match ele.to_bytes() {
-            Ok(pixel_data_bytes) => {
-                // Safely cast the byte slice to a slice of i16s
-                match try_cast_slice::<_, i16>(pixel_data_bytes.as_ref()) {
-                    Ok(pixels) => Ok(Cow::Owned(pixels.to_vec())),  // Owned Vec<i16>
-                    Err(_) => Err("Pixel data length is not aligned to i16 size"),
-                }
-            }
-            Err(_) => Err("Error converting element to bytes"),
-        },
-        Err(_) => Err("Pixel data element not found"),
-    }
-}
-
-/// Process a DICOM file represented as raw bytes.
-pub fn process(data: Vec<u8>) -> io::Result<()> {
-    println!("Processing data of size: {}", data.len());
-
-    // Wrap the data in a Cursor to simulate reading from a file
-    let cursor = Cursor::new(data);
-
-    // Attempt to open the DICOM object from the in-memory data
-    let dcm = match from_reader(cursor) {
-        Ok(dcm) => dcm,
-        Err(e) => {
-            println!("Failed to parse DICOM object: {:?}", e);
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "Failed to parse DICOM object"));
+        match task.await {
+            Ok(Ok(())) => { /* Task succeeded */ }
+            Ok(Err(err)) => eprintln!("Task error: {}", err),
+            Err(join_err) => eprintln!("Task panicked or was cancelled: {:?}", join_err),
         }
-    };
-
-    // Retrieve various DICOM elements by name using the helper function
-    match get_element_as_str(&dcm, "PatientName") {
-        Ok(patient_name) => println!("Patient Name: {:?}", patient_name),
-        Err(e) => println!("Error retrieving Patient Name: {}", e),
     }
 
-    match get_element_as_str(&dcm, "Modality") {
-        Ok(modality) => println!("Modality: {:?}", modality),
-        Err(e) => println!("Error retrieving Modality: {}", e),
-    }
-
-    match get_element_as_str(&dcm, "SliceLocation") {
-        Ok(loc) => println!("Slice Location: {}", loc),
-        Err(e) => println!("Error retrieving Slice Location: {}", e),
-    }
-
-    // Retrieve and handle pixel data
-    match get_pixel_data(&dcm) {
-        Ok(pixels) if !pixels.is_empty() => {
-            println!("Pixel data (sample): {:?}", &pixels[0..10]);
-        }
-        Ok(_) => println!("No pixel data found."),
-        Err(e) => println!("Error retrieving pixel data: {}", e),
-    }
-
-    Ok(())
+    // Extract the final repository and return it
+    let repo = repo.lock().await;
+    Ok((*repo).clone())
 }

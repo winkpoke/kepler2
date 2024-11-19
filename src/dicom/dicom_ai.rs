@@ -1,338 +1,152 @@
 // dicom_ai.rs
 
-#[macro_export]
-macro_rules! define_dicom_struct {
-    // Main macro to define a struct with fields, types, DICOM tags, and optionality
-    ($name:ident, { $(($field_name:ident, $field_type:ty, $dicom_tag:expr, $is_optional:tt)),* $(,)? }) => {
-        #[derive(Debug, Clone)]
-        pub struct $name {
-            // Generate struct fields based on optionality
-            $(
-                pub $field_name: $crate::define_dicom_struct!(@optional $field_type, $is_optional),
-            )*
-        }
+use super::{
+    ct_image::CTImage, dicom_repo::DicomRepo, image_series::ImageSeries, patient::Patient,
+    studyset::StudySet,
+};
 
-        impl $name {
-            // Constructor function to create struct instances
-            pub fn new($($field_name: $crate::define_dicom_struct!(@constructor_type $field_type, $is_optional)),*) -> Self {
-                $name {
-                    $(
-                        $field_name,
-                    )*
-                }
-            }
-
-            // Function to format DICOM tags and their corresponding values into a String
-            pub fn format_tags(&self) -> String {
-                let mut result = String::new();
-                $(
-                    $crate::define_dicom_struct!(@to_string $field_name, $field_type, $dicom_tag, $is_optional, self, result);
-                )*
-                result
-            }
-        }
-    };
-
-    // Helper rule to wrap type in Option if the field is optional
-    (@optional $field_type:ty, true) => {
-        Option<$field_type>
-    };
-    (@optional $field_type:ty, false) => {
-        $field_type
-    };
-
-    // Helper rule for constructor argument types
-    (@constructor_type $field_type:ty, true) => {
-        Option<$field_type>
-    };
-    (@constructor_type $field_type:ty, false) => {
-        $field_type
-    };
-
-    // Helper rule to handle formatting for optional fields
-    (@to_string $field_name:ident, $field_type:ty, $dicom_tag:expr, true, $self:ident, $result:ident) => {
-        let value = match &$self.$field_name {
-            Some(val) => format!("{}: Some({:?})\n", $dicom_tag, val),  // Directly use `val` (which is `String`)
-            None => format!("{}: None (Optional)\n", $dicom_tag),
-        };
-        $result.push_str(value.as_str());
-    };
-
-    // Helper rule to handle formatting for mandatory fields
-    (@to_string $field_name:ident, $field_type:ty, $dicom_tag:expr, false, $self:ident, $result:ident) => {
-        $result.push_str(format!("{}: {:?}\n", $dicom_tag, &$self.$field_name).as_str());  // Borrow `String` as `&str`
-    };
-}
-
-// Use the macro to define the Patient struct
-define_dicom_struct!(Patient, {
-    (id, String, "(0010,0020) PatientID", false),           // PatientID is required
-    (name, String, "(0010,0010) PatientName", false),       // PatientName is required
-    (birthdate, String, "(0010,0030) PatientBirthDate", true),  // PatientBirthDate is optional
-    (sex, String, "(0010,0040) PatientSex", true)              // Sex is optional
-});
-
-// Use the macro to define the StudySet struct
-define_dicom_struct!(StudySet, {
-    (id, String, "(0020,0010) StudyID", false),           // StudyID is required
-    (date, String, "(0020,000D) StudyDate", false),       // StudyDate is required
-    (description, String, "(0008,1030) StudyDescription", true) // StudyDescription is optional
-});
-
-// Use the macro to define the ImageSeries struct
-define_dicom_struct!(ImageSeries, {
-    (id, String, "(0020,000E) SeriesInstanceUID", false),  // SeriesID is required
-    (modality, String, "(0008,0060) Modality", false),     // Modality is required
-    (description, String, "(0008,103E) SeriesDescription", true) // SeriesDescription is optional
-});
-
-// Define the CTImage struct with specific fields, types, DICOM tags, and optionality
-define_dicom_struct!(CTImage, {
-    (rows, u16, "(0028,0010) Rows", false),                             // Rows (Mandatory)
-    (columns, u16, "(0028,0011) Columns", false),                        // Columns (Mandatory)
-    (pixel_spacing, (f32, f32), "(0028,0030) PixelSpacing", true),       // PixelSpacing (Optional)
-    (image_position_patient, (f32, f32, f32), "(0020,0032) ImagePositionPatient", true), // ImagePositionPatient (Optional)
-    (image_orientation_patient, (f32, f32, f32, f32, f32, f32), "(0020,0037) ImageOrientationPatient", true), // ImageOrientationPatient (Optional)
-    (pixel_data, Vec<u8>, "(7FE0,0010) PixelData", false),
-    (slope, f32, "(0028,1053) RescaleSlope", true),                      // RescaleSlope (Optional)
-    (intercept, f32, "(0028,1052) RescaleIntercept", true)               // RescaleIntercept (Optional)                // PixelData (Mandatory)
-});
-
-use std::borrow::Cow;
 use std::io::Cursor;
+use std::{borrow::Cow, collections::HashMap};
 // use bytemuck::cast_slice;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bytemuck::checked::try_cast_slice;
 // use dicom_core::value::{PixelFragmentSequence, Value};
 // use dicom_core::{DicomValue, PrimitiveValue, Tag};
 use dicom_object::{from_reader, FileDicomObject, InMemDicomObject};
 
-impl Patient {
-    // Function to parse the DICOM file and generate the Patient structure
-    pub fn from_file(dicom_data: &[u8]) -> Result<Patient> {
-        // Parse the DICOM file into a `FileDicomObject`
-        let dicom_obj: FileDicomObject<InMemDicomObject> =
-            FileDicomObject::from_reader(dicom_data)?;
-
-        // Retrieve required fields
-        let id = dicom_obj
-            .element_by_name("PatientID")?
-            .to_str()?
-            .to_string();
-        let name = dicom_obj
-            .element_by_name("PatientName")?
-            .to_str()?
-            .to_string();
-
-        // Optional fields
-        let birthdate = dicom_obj
-            .element_by_name("PatientBirthDate")
-            .map(|v| v.to_str().ok().map(|v| v.to_string()))
-            .ok()
-            .flatten();
-        let sex = dicom_obj
-            .element_by_name("PatientSex")
-            .map(|v| v.to_str().ok().map(|v| v.to_string()))
-            .ok()
-            .flatten();
-
-        // Return the populated struct
-        Ok(Patient {
-            id,
-            name,
-            birthdate,
-            sex,
-        })
-    }
-}
-
-impl StudySet {
-    // Function to parse the DICOM file and generate the StudySet structure
-    pub fn from_file(dicom_data: &[u8]) -> Result<StudySet> {
-        // Parse the DICOM file into a `FileDicomObject`
-        let dicom_obj: FileDicomObject<InMemDicomObject> =
-            FileDicomObject::from_reader(dicom_data)?;
-
-        // Retrieve required fields
-        let id = dicom_obj.element_by_name("StudyID")?.to_str()?.to_string();
-        let date = dicom_obj
-            .element_by_name("StudyDate")?
-            .to_str()?
-            .to_string();
-
-        // Optional fields
-        let description = dicom_obj
-            .element_by_name("StudyDescription")
-            .map(|v| v.to_str().ok().map(|v| v.to_string()))
-            .ok()
-            .flatten(); // Flatten the Option<Option<String>> to Option<String>
-
-        // Return the populated struct
-        Ok(StudySet {
-            id,
-            date,
-            description,
-        })
-    }
-}
-
-impl ImageSeries {
-    // Function to parse the DICOM file and generate the ImageSeries structure
-    pub fn from_file(dicom_data: &[u8]) -> Result<ImageSeries> {
-        // Parse the DICOM file into a `FileDicomObject`
-        let dicom_obj: FileDicomObject<InMemDicomObject> =
-            FileDicomObject::from_reader(dicom_data)?;
-
-        // Retrieve the modality to ensure the correct image type (CT)
-        let modality = dicom_obj.element_by_name("Modality")?.to_str()?.to_string();
-
-        // Check if the modality is CT, if not, return an error
-        if modality != "CT" {
-            return Err(anyhow::anyhow!("Expected CT image, but got {} image", modality).into());
-        }
-
-        // Retrieve required fields
-        let id = dicom_obj
-            .element_by_name("SeriesInstanceUID")?
-            .to_str()?
-            .to_string();
-        let modality = dicom_obj.element_by_name("Modality")?.to_str()?.to_string();
-
-        // Optional fields
-        let description = dicom_obj
-            .element_by_name("SeriesDescription")
-            .map(|v| v.to_str().ok().map(|v| v.to_string()))
-            .ok()
-            .flatten();
-
-        // Return the populated struct
-        Ok(ImageSeries {
-            id,
-            modality,
-            description,
-        })
-    }
-}
-
-impl CTImage {
-    // Function to parse the DICOM file and generate the CTImage structure
-    fn from_file(dicom_data: &[u8]) -> Result<CTImage> {
-        // Parse the DICOM file into a `FileDicomObject`
-        let dicom_obj: FileDicomObject<InMemDicomObject> =
-            FileDicomObject::from_reader(dicom_data)?;
-
-        // Directly retrieve required fields using element_by_name and specific methods like float32_slice
-        let rows = dicom_obj.element_by_name("Rows")?.to_int()?; // Rows (u16)
-        let columns = dicom_obj.element_by_name("Columns")?.to_int()?; // Columns (u16)
-
-        // Optional fields: use float32_slice for f32 tuples or specific pixel data
-        let pixel_spacing = dicom_obj
-            .element_by_name("PixelSpacing")?
-            .to_multi_float32()
-            .ok()
-            .map(|v| (v[0], v[1])); // PixelSpacing
-        let image_position_patient = dicom_obj
-            .element_by_name("ImagePositionPatient")?
-            .to_multi_float32()
-            .ok()
-            .map(|v| (v[0], v[1], v[2])); // ImagePositionPatient
-        let image_orientation_patient = dicom_obj
-            .element_by_name("ImageOrientationPatient")?
-            .to_multi_float32()
-            .ok()
-            .map(|v| (v[0], v[1], v[2], v[3], v[4], v[5])); // ImageOrientationPatient
-
-        // Extract Pixel Data directly using the PixelData tag
-        let pixel_data = dicom_obj.element_by_name("PixelData")?.to_bytes()?.to_vec(); // PixelData
-
-        // Optional fields for Slope and Intercept
-        let slope = dicom_obj
-            .element_by_name("RescaleSlope")
-            .map(|e| e.to_float32().ok())
-            .ok()
-            .flatten();
-
-        let intercept = dicom_obj
-            .element_by_name("RescaleIntercept")
-            .map(|e| e.to_float32().ok())
-            .ok()
-            .flatten();
-
-        // Return the populated struct
-        Ok(CTImage {
-            rows,
-            columns,
-            pixel_spacing,
-            image_position_patient,
-            image_orientation_patient,
-            pixel_data,
-            slope,
-            intercept,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Test the Patient struct
-    #[test]
-    fn test_patient_format_tags() {
-        // Creating a Patient instance with both mandatory and optional fields
-        let patient = Patient::new(
-            String::from("12345"),            // id (mandatory)
-            String::from("John Doe"),         // name (mandatory)
-            Some(String::from("1990-01-01")), // birthdate (optional)
-            None,                             // sex (optional)
-        );
-
-        // Capture the returned string from format_tags
-        let output_str = patient.format_tags();
-
-        // Check if the output contains the expected tags and values
-        assert!(output_str.contains("(0010,0020) PatientID: \"12345\""));
-        assert!(output_str.contains("(0010,0010) PatientName: \"John Doe\""));
-        assert!(output_str.contains("(0010,0030) PatientBirthDate: Some(\"1990-01-01\")"));
-        assert!(output_str.contains("(0010,0040) PatientSex: None (Optional)"));
+    // Dummy DICOM data (minimal example)
+    fn get_dummy_dicom_patient() -> Vec<u8> {
+        vec![
+            0x44, 0x49, 0x43, 0x4D, // DICOM magic
+            // Patient info (simplified, would be more complex in real DICOM)
+            0x10, 0x20, 0x00, 0x00, // Patient ID tag
+            b'P', b'a', b't', b'i', b'e', b'n', b't',
+            b'1', // PatientID: Patient1
+                  // other relevant DICOM tags go here
+        ]
     }
 
-    // Test the StudySet struct
-    #[test]
-    fn test_study_set_format_tags() {
-        let study_set = StudySet::new(
-            String::from("Study123"),      // id (mandatory)
-            String::from("2024-11-14"),    // date (mandatory)
-            Some(String::from("CT Scan")), // description (optional)
-        );
-
-        // Capture the returned string from format_tags
-        let output_str = study_set.format_tags();
-
-        // Check if the output contains the expected tags and values
-        assert!(output_str.contains("(0020,0010) StudyID: \"Study123\""));
-        assert!(output_str.contains("(0020,000D) StudyDate: \"2024-11-14\""));
-        assert!(output_str.contains("(0008,1030) StudyDescription: Some(\"CT Scan\")"));
+    fn get_dummy_dicom_study() -> Vec<u8> {
+        vec![
+            0x44, 0x49, 0x43, 0x4D, // DICOM magic
+            // Study info
+            0x20, 0x10, 0x00, 0x00, // Study ID tag
+            b'S', b't', b'u', b'd', b'y',
+            b'1', // StudyID: Study1
+                  // other relevant DICOM tags
+        ]
     }
 
-    // Test the ImageSeries struct
     #[test]
-    fn test_image_series_format_tags() {
-        let image_series = ImageSeries::new(
-            String::from("Series123"),      // id (mandatory)
-            String::from("CT"),             // modality (mandatory)
-            Some(String::from("Brain CT")), // description (optional)
-        );
+    fn test_patient_parsing() -> Result<()> {
+        // Test Patient parsing from DICOM file (dummy DICOM data)
+        let dicom_data = get_dummy_dicom_patient();
+        let patient = Patient::from_file(&dicom_data)?;
 
-        // Capture the returned string from format_tags
-        let output_str = image_series.format_tags();
+        assert_eq!(patient.patient_id, "Patient1");
+        assert_eq!(patient.name, "Patient1");
+        assert!(patient.birthdate.is_none());
+        assert!(patient.sex.is_none());
 
-        // Check if the output contains the expected tags and values
-        assert!(output_str.contains("(0020,000E) SeriesInstanceUID: \"Series123\""));
-        assert!(output_str.contains("(0008,0060) Modality: \"CT\""));
-        assert!(output_str.contains("(0008,103E) SeriesDescription: Some(\"Brain CT\")"));
+        Ok(())
     }
 
+    #[test]
+    fn test_study_parsing() -> Result<()> {
+        // Test Study parsing from DICOM file (dummy DICOM data)
+        let dicom_data = get_dummy_dicom_study();
+        let study = StudySet::from_file(&dicom_data)?;
+
+        assert_eq!(study.study_id, "Study1");
+        assert_eq!(study.uid, "Study1"); // Assuming StudyInstanceUID is the same as StudyID for simplicity
+        assert_eq!(study.patient_id, "Patient1");
+        assert!(study.date.is_empty()); // Dummy DICOM data has no date
+        assert!(study.description.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dicom_repo_add_patient() -> Result<()> {
+        let mut repo = DicomRepo::new();
+        let dicom_data = get_dummy_dicom_patient();
+        let patient = Patient::from_file(&dicom_data)?;
+
+        // Add the patient to the repository
+        repo.add_patient(patient.clone());
+
+        // Verify the patient has been added
+        // assert_eq!(repo.patients.get(&patient.patient_id), Some(&patient));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dicom_repo_add_study() -> Result<()> {
+        let mut repo = DicomRepo::new();
+        let dicom_data = get_dummy_dicom_study();
+        let study = StudySet::from_file(&dicom_data)?;
+
+        // Add the study to the repository
+        repo.add_study(study.clone());
+
+        // Verify the study has been added
+        // assert_eq!(repo.study_sets.get(&study.uid), Some(&study));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dicom_repo_query_patient_study() -> Result<()> {
+        let mut repo = DicomRepo::new();
+        let dicom_patient_data = get_dummy_dicom_patient();
+        let patient = Patient::from_file(&dicom_patient_data)?;
+
+        let dicom_study_data = get_dummy_dicom_study();
+        let study = StudySet::from_file(&dicom_study_data)?;
+
+        // Add patient and study to the repository
+        repo.add_patient(patient.clone());
+        repo.add_study(study.clone());
+
+        // Query study by patient ID
+        let studies = repo.get_studies_by_patient(&patient.patient_id);
+        assert_eq!(studies.len(), 1);
+        // assert_eq!(studies[0], &study);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dicom_repo_query_series_by_study() -> Result<()> {
+        let mut repo = DicomRepo::new();
+        let dicom_study_data = get_dummy_dicom_study();
+        let study = StudySet::from_file(&dicom_study_data)?;
+
+        let dummy_series = ImageSeries {
+            uid: "Series1".to_string(),
+            study_uid: study.uid.clone(),
+            modality: "CT".to_string(),
+            description: Some("Test series".to_string()),
+        };
+
+        // Add study and series to the repository
+        repo.add_study(study.clone());
+        repo.add_image_series(dummy_series.clone());
+
+        // Query series by study UID
+        let series = repo.get_series_by_study(&study.uid);
+        assert_eq!(series.len(), 1);
+        // assert_eq!(series[0], &dummy_series);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_from_file() -> Result<()> {
         // Use `include_bytes!` to include the DICOM file as a byte array
         // Replace this path with your actual DICOM file, ensuring it's in the correct directory
@@ -340,8 +154,15 @@ mod tests {
 
         // Call the from_file function to parse the DICOM data into CTImage
 
-        let ct_image = CTImage::from_file(dicom_data)?;
+        let ct_image = CTImage::from_file(dicom_data);
+        match &ct_image {
+            Ok(_) => println!("reading CT image ok"),
+            Err(err) => eprint!("error: {:?}", err),
+        }
+        let ct_image = ct_image.unwrap();
+
         // Check the results
+        println!("id: {}", ct_image.uid);
         println!("Rows: {}", ct_image.rows);
         println!("Columns: {}", ct_image.columns);
 
@@ -363,17 +184,17 @@ mod tests {
             println!("ImageOrientationPatient: None");
         }
 
-        println!("PixelData length: {}", ct_image.pixel_data.len());
+        // println!("PixelData length: {}", ct_image.pixel_data.len());
 
         // RescaleSlope
-        if let Some(slope) = ct_image.slope {
+        if let Some(slope) = ct_image.rescale_slope {
             println!("RescaleSlope: {}", slope);
         } else {
             println!("RescaleSlope: None");
         }
 
         // RescaleIntercept
-        if let Some(intercept) = ct_image.intercept {
+        if let Some(intercept) = ct_image.rescale_intercept {
             println!("RescaleIntercept: {}", intercept);
         } else {
             println!("RescaleIntercept: None");
@@ -400,5 +221,68 @@ mod tests {
     fn test_parse_from_dicom() {
         // Call the test function and check that no error occurs
         assert!(test_from_file().is_ok());
+    }
+
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn test_generate_clinical_dataset_from_folder() {
+        // Set the directory containing the DICOM files
+        let folder_path = "C:\\share\\imrt\\";
+
+        // Ensure the folder exists
+        assert!(
+            Path::new(folder_path).exists(),
+            "Test folder does not exist: {}",
+            folder_path
+        );
+
+        // Initialize an empty DicomRepo
+        let mut dataset = DicomRepo::new();
+
+        // Read all files in the folder
+        let files = fs::read_dir(folder_path).expect("Failed to read test folder");
+        for entry in files {
+            if let Ok(file) = entry {
+                let path = file.path();
+                if path.is_file() {
+                    // Read file data
+                    let dicom_data = fs::read(&path).expect("Failed to read DICOM file");
+
+                    // Attempt to parse the DICOM data into known structures
+                    if let Ok(patient) = Patient::from_file(&dicom_data) {
+                        dataset.add_patient(patient);
+                    }
+                    if let Ok(study) = StudySet::from_file(&dicom_data) {
+                        dataset.add_study(study);
+                    }
+                    if let Ok(series) = ImageSeries::from_file(&dicom_data) {
+                        dataset.add_image_series(series);
+                    }
+                    if let Ok(ct_image) = CTImage::from_file(&dicom_data) {
+                        dataset.add_ct_image(ct_image);
+                    }
+                }
+            }
+        }
+        // Output the formatted dataset for debugging
+        let formatted_worklist = dataset.to_string();
+        println!("{}", formatted_worklist);
+
+        // Basic validation checks
+        assert!(!dataset.patients.is_empty(), "No patients found in dataset");
+        assert!(
+            !dataset.study_sets.is_empty(),
+            "No studies found in dataset"
+        );
+        assert!(
+            !dataset.image_series.is_empty(),
+            "No image series found in dataset"
+        );
+        assert!(
+            !dataset.ct_images.is_empty(),
+            "No CT images found in dataset"
+        );
     }
 }

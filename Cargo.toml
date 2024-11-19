@@ -22,7 +22,8 @@ anyhow = "1.0"
 dicom-object = "*"
 dicom-core = "*"
 
-tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread"] }
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["full"] }
 
 [dependencies.image]
 version = "0.25.2"

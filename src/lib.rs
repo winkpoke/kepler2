@@ -1,3 +1,5 @@
+#![feature(duration_millis_float)]
+
 use log::{debug, error, info, warn};
 use std::{iter, sync::Arc};
 // use wgpu::util::DeviceExt;
@@ -22,6 +24,11 @@ pub mod dicom;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::io;
+
+use dicom::*;
+
+// use std::time::Instant;
+
 
 fn list_files_in_directory(dir: &str) -> io::Result<Vec<PathBuf>> {
     let mut file_paths = Vec::new();
@@ -289,18 +296,53 @@ pub async fn run() {
     }
 
     warn!("Start the program ...");
-    let rst = crate::dicom::read_dicom();
-    if let Err(err) = rst {
-        error!("{:?}", err);
-    }
+    // let rst = crate::dicom::read_dicom();
+    // if let Err(err) = rst {
+    //     error!("{:?}", err);
+    // }
 
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
+    // // Start the timer
+    // let start_time = Instant::now();
 
-    let process_fn = Arc::new(dicom::fileio::process);
-    dicom::fileio::read_and_process_files(file_names, process_fn).await.unwrap();
+    // let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
+    // let repo = dicom::fileio::parse_dcm_directories(vec!["C:\\share\\imrt", "C:\\share\\head_mold"]).await.unwrap();
+    // // println!("DicomRepo:\n{}", repo.to_string());
+    // println!("Patients:\n{:?}", repo.patients);
+    // // Stop the timer
+    // let elapsed_time = start_time.elapsed();
+
+    // // Print the repository and performance details
+    // // println!("Parsed repository: {:?}", repo);
+    // println!(
+    //     "Parsing completed in {:.1} ms.",
+    //     elapsed_time.as_millis_f32()
+    // );
+
+    // let dataset = dicom::DicomRepo::new();
+    // let process = |data: Vec<u8>| -> io::Result<()> {
+    //     /// Process a DICOM file represented as raw bytes.
+    //     println!("Processing data of size: {}", data.len());
+    
+    //     // Attempt to parse the DICOM data into known structures
+    //     if let Ok(patient) = Patient::from_file(&data) {
+    //         dataset.add_patient(patient);
+    //     }
+    //     if let Ok(study) = StudySet::from_file(&data) {
+    //         dataset.add_study(study);
+    //     }
+    //     if let Ok(series) = ImageSeries::from_file(&data) {
+    //         dataset.add_image_series(series);
+    //     }
+    //     if let Ok(ct_image) = CTImage::from_file(&data) {
+    //         dataset.add_ct_image(ct_image);
+    //     }
+    //     Ok(())
+    // };
+    // let process_fn = Arc::new(process);
+    // dicom::fileio::read_and_process_files(file_names, process_fn).await.unwrap();
 
     #[cfg(target_arch = "wasm32")]
     {
