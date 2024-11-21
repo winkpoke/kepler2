@@ -187,13 +187,18 @@ impl DicomRepo {
 
         serde_json::to_string(&series).map_err(|err| err.to_string()) // Serialize series to JSON
     }
-
+    
     // Query images by series and return them as JSON
     pub fn get_images_by_series(&self, series_id: &str) -> Result<String, String> {
-        let images: Vec<&CTImage> = self
+        let images: Vec<CTImage> = self
             .ct_images
             .values()
             .filter(|image| image.series_uid == series_id)
+            .map(|image| {
+                let mut cloned_image = image.clone(); // Clone the CTImage
+                cloned_image.pixel_data.clear(); // Clear the pixel_data field
+                cloned_image
+            })
             .collect();
 
         serde_json::to_string(&images).map_err(|err| err.to_string()) // Serialize images to JSON
