@@ -284,15 +284,24 @@ impl<'a> State<'a> {
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
+#[cfg(target_arch = "wasm32")]
+pub async fn init() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
+} 
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub async fn run() {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
-        } else {
-            env_logger::init();
-        }
-    }
+    // cfg_if::cfg_if! {
+    //     if #[cfg(target_arch = "wasm32")] {
+    //         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    //         console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
+    //     } else {
+    //         env_logger::init();
+    //     }
+    // }
+    #[cfg(not(target_arch = "wasm32"))]
+    env_logger::init();
 
     warn!("Start the program ...");
     // let rst = crate::dicom::read_dicom();

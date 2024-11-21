@@ -1,5 +1,8 @@
-use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use anyhow::Result;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::fs::{self, File};
@@ -12,15 +15,15 @@ use super::*;
 
 /// Parses DICOM files from a list of directories and constructs a `DicomRepo`.
 ///
-/// This function traverses each provided directory asynchronously, collects file paths, 
-/// and delegates the parsing of files to `parse_dcm_files`. It ensures that only files 
+/// This function traverses each provided directory asynchronously, collects file paths,
+/// and delegates the parsing of files to `parse_dcm_files`. It ensures that only files
 /// (not directories) are added to the list of file paths for processing.
 ///
 /// # Arguments
 /// - `directories`: A vector of directory paths containing DICOM files to process.
 ///
 /// # Returns
-/// A `Result` containing the constructed `DicomRepo` on success, or an error if any 
+/// A `Result` containing the constructed `DicomRepo` on success, or an error if any
 /// directory cannot be read.
 ///
 /// # Errors
@@ -33,11 +36,9 @@ use super::*;
 /// let repo = parse_dcm_directories(directories).await?;
 /// ```
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn parse_dcm_directories(
-    directories: Vec<&str>,
-) -> Result<DicomRepo> {
+pub async fn parse_dcm_directories(directories: Vec<&str>) -> Result<DicomRepo> {
     let mut file_paths = Vec::new();
-    
+
     // Collect all files from the provided directories
     for dir_path in directories {
         let mut entries = fs::read_dir(dir_path).await.map_err(|err| {
@@ -56,36 +57,34 @@ pub async fn parse_dcm_directories(
 }
 
 /// Parses a list of DICOM files concurrently and constructs a `DicomRepo`.
-/// 
-/// This function reads the contents of each file asynchronously, parses DICOM data, 
+///
+/// This function reads the contents of each file asynchronously, parses DICOM data,
 /// and updates a shared `DicomRepo`. File processing is performed concurrently using
 /// Tokio's task spawning, and the shared repository is updated in a thread-safe manner.
-/// 
+///
 /// # Arguments
 /// - `file_paths`: A vector of file paths to DICOM files to process.
 ///
 /// # Returns
-/// A `Result` containing the constructed `DicomRepo` on success, or an error if any 
+/// A `Result` containing the constructed `DicomRepo` on success, or an error if any
 /// critical operation (e.g., file I/O) fails.
 ///
 /// # Errors
-/// - If a file cannot be opened, read, or parsed, an error will be logged, and the function 
+/// - If a file cannot be opened, read, or parsed, an error will be logged, and the function
 ///   will continue processing the remaining files. Non-fatal errors will not stop the process.
-/// 
+///
 /// # Concurrency
-/// - Parsing of DICOM data is done outside of the critical section to minimize the time spent 
+/// - Parsing of DICOM data is done outside of the critical section to minimize the time spent
 ///   holding the `Mutex` lock on the shared repository.
 /// - Each file is processed in a separate Tokio task, enabling high concurrency.
-/// 
+///
 /// # Example
 /// ```rust
 /// let files = vec![PathBuf::from("file1.dcm"), PathBuf::from("file2.dcm")];
 /// let repo = parse_dcm_files(files).await?;
 /// ```
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn parse_dcm_files(
-    file_paths: Vec<std::path::PathBuf>,
-) -> Result<DicomRepo> {
+pub async fn parse_dcm_files(file_paths: Vec<std::path::PathBuf>) -> Result<DicomRepo> {
     // Shared repository and counter tracker
     let repo = Arc::new(Mutex::new(DicomRepo::new()));
     let count = Arc::new(AtomicUsize::new(0));
@@ -155,81 +154,89 @@ pub async fn parse_dcm_files(
 
 //------------------------------ WASM Code -------------------------------------
 
-// #[cfg(target_arch = "wasm32")]
-// use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
+use js_sys::{Array, Promise, Uint8Array};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 
-// #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-// #[cfg(target_arch = "wasm32")]
-// #[wasm_bindgen]
-// pub async fn parse_dcm_files_wasm(files: Array) -> Result<DicomRepo, JsValue> {
-//     // Shared repository and counter
-//     let repo = Arc::new(Mutex::new(DicomRepo::new()));
-//     let count = Arc::new(AtomicUsize::new(0));
-//     let len = files.length() as usize;
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[cfg(target_arch = "wasm32")]
+pub async fn parse_dcm_files_wasm(files: Array) -> Result<DicomRepo, JsValue> {
+    // use futures::channel::oneshot;
+    // use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+    // use wasm_bindgen_futures::future_to_promise;
+    use web_sys::{File, FileReader, ProgressEvent, console};
+    use log::error;
 
-//     // Processing each file asynchronously
-//     let tasks: Vec<Promise> = (0..len)
-//         .map(|idx| {
-//             let file: File = files.get(idx as u32).dyn_into().unwrap();
-//             let file_reader = FileReader::new().unwrap();
-//             let repo_clone = Arc::clone(&repo);
-//             let count_clone = Arc::clone(&count);
+    // Shared repository and counter
+    let repo = Arc::new(Mutex::new(DicomRepo::new()));
+    let len = files.length() as usize;
+    error!("start parsing");
+    error!("len = {}", len);
 
-//             // Create a promise for each file
-//             let promise = future_to_promise(async move {
-//                 let (sender, receiver) = tokio::sync::oneshot::channel();
+    console::log_1(&JsValue::from("start parsing"));
+    // Processing each file asynchronously
+    let tasks: Vec<Promise> = (0..len)
+        .map(|idx| {
+            let file: File = files.get(idx as u32).dyn_into().unwrap();
+            let file_reader = FileReader::new().unwrap();
+            // let repo_clone = Arc::clone(&repo);
 
-//                 // Closure for file read completion
-//                 let closure = Closure::once_into_js(move |event: ProgressEvent| {
-//                     let result = (|| -> Result<(), JsValue> {
-//                         let buffer = event
-//                             .target()
-//                             .ok_or_else(|| JsValue::from("Failed to retrieve target"))?
-//                             .dyn_into::<FileReader>()?
-//                             .result()
-//                             .ok_or_else(|| JsValue::from("Failed to retrieve file result"))?;
+            // Create a promise for each file
+            let promise = Promise::new(&mut |resolve, reject| {
+                let repo_clone = Arc::clone(&repo);
+                // The closure now correctly accepts the `ProgressEvent`
+                let closure = Closure::once_into_js(move |event: ProgressEvent| {
+                    let result: Result<(), String> = {
+                        let buffer = event
+                            .target()
+                            .ok_or_else(|| JsValue::from("Failed to retrieve target"))?
+                            .dyn_into::<FileReader>()?
+                            .result()?;
+                            // .map_err(|| JsValue::from("Failed to retrieve file result"))?;
 
-//                         let buffer = js_sys::Uint8Array::new(&buffer).to_vec();
+                        let buffer = Uint8Array::new(&buffer).to_vec();
 
-//                         // Parse the DICOM and update repository
-//                         let mut repo = repo_clone.lock().unwrap();
-//                         if let Ok(patient) = Patient::from_bytes(&buffer) {
-//                             repo.add_patient(patient);
-//                         }
-//                         if let Ok(study) = StudySet::from_bytes(&buffer) {
-//                             repo.add_study(study);
-//                         }
-//                         if let Ok(series) = ImageSeries::from_bytes(&buffer) {
-//                             repo.add_image_series(series);
-//                         }
-//                         if let Ok(ct_image) = CTImage::from_bytes(&buffer) {
-//                             repo.add_ct_image(ct_image);
-//                         }
+                        // Parse the DICOM and update repository
+                        let mut repo = repo_clone.lock().unwrap();
+                        if let Ok(patient) = Patient::from_bytes(&buffer) {
+                            repo.add_patient(patient);
+                        }
+                        if let Ok(study) = StudySet::from_bytes(&buffer) {
+                            repo.add_study(study);
+                        }
+                        if let Ok(series) = ImageSeries::from_bytes(&buffer) {
+                            repo.add_image_series(series);
+                        }
+                        if let Ok(ct_image) = CTImage::from_bytes(&buffer) {
+                            repo.add_ct_image(ct_image);
+                        }
 
-//                         Ok(())
-//                     })();
+                        Ok(())
+                    };
 
-//                     // Notify the promise
-//                     let _ = sender.send(result);
-//                 });
+                    // Resolve or reject the promise based on the result
+                    match result {
+                        Ok(_) => resolve.call0(&JsValue::NULL),
+                        Err(err) => reject.call0(&JsValue::from(err)),
+                    }
+                });
 
-//                 file_reader.set_onload(Some(closure.as_ref().unchecked_ref()));
-//                 file_reader.read_as_array_buffer(&file).expect("Failed to read file");
+                file_reader.set_onload(Some(closure.as_ref().unchecked_ref()));
+                file_reader.read_as_array_buffer(&file).expect("Failed to read file");
+            });
 
-//                 // Wait for the processing to complete
-//                 receiver.await.unwrap_or_else(|_| Err(JsValue::from("Task failed"))).map_err(|e| e)
-//             });
+            promise
+        })
+        .collect();
 
-//             promise
-//         })
-//         .collect();
+    // Wait for all tasks to complete (using Promise.all)
+    let all_promise = js_sys::Promise::all(&tasks.into_iter().collect::<Array>());
+    wasm_bindgen_futures::JsFuture::from(all_promise).await?;
 
-//     // Wait for all tasks to complete
-//     let all_promise = js_sys::Promise::all(&tasks.into_iter().collect::<Array>());
-//     wasm_bindgen_futures::JsFuture::from(all_promise).await.map_err(|e| e)?;
-
-//     // Return the DicomRepo directly as a JsValue
-//     let repo = repo.lock().await;
-//     Ok((*repo).clone()) // Return the DicomRepo directly (as a JsValue)
-// }
+    // Return the DicomRepo directly as a JsValue
+    let repo = repo.lock().map_err(|e| JsValue::from(e.to_string()))?;
+    Ok(repo.clone())
+}

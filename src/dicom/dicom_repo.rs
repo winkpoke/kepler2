@@ -48,39 +48,6 @@ impl DicomRepo {
         self.ct_images.insert(image.uid.clone(), image);
     }
 
-    pub fn get_all_patients(&self) -> Vec<&Patient> {
-        self.patients.values().collect()
-    }
-    
-    // Query patients
-    pub fn get_patient(&self, patient_id: &str) -> Option<&Patient> {
-        self.patients.get(patient_id)
-    }
-
-    // Query studies by patient
-    pub fn get_studies_by_patient(&self, patient_id: &str) -> Vec<&StudySet> {
-        self.study_sets
-            .values()
-            .filter(|s| s.patient_id == patient_id)
-            .collect()
-    }
-
-    // Query series by study
-    pub fn get_series_by_study(&self, study_id: &str) -> Vec<&ImageSeries> {
-        self.image_series
-            .values()
-            .filter(|s| s.study_uid == study_id)
-            .collect()
-    }
-
-    // Query images by series
-    pub fn get_images_by_series(&self, series_id: &str) -> Vec<&CTImage> {
-        self.ct_images
-            .values()
-            .filter(|img| img.series_uid == series_id)
-            .collect()
-    }
-
     pub fn to_string(&self) -> String {
         let mut result = String::new();
 
@@ -135,5 +102,100 @@ impl DicomRepo {
             }
         }
         result
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl DicomRepo {
+    pub fn get_all_patients(&self) -> Vec<&Patient> {
+        self.patients.values().collect()
+    }
+    
+    // Query patients
+    pub fn get_patient(&self, patient_id: &str) -> Option<&Patient> {
+        self.patients.get(patient_id)
+    }
+
+    // Query studies by patient
+    pub fn get_studies_by_patient(&self, patient_id: &str) -> Vec<&StudySet> {
+        self.study_sets
+            .values()
+            .filter(|s| s.patient_id == patient_id)
+            .collect()
+    }
+
+    // Query series by study
+    pub fn get_series_by_study(&self, study_id: &str) -> Vec<&ImageSeries> {
+        self.image_series
+            .values()
+            .filter(|s| s.study_uid == study_id)
+            .collect()
+    }
+
+    // Query images by series
+    pub fn get_images_by_series(&self, series_id: &str) -> Vec<&CTImage> {
+        self.ct_images
+            .values()
+            .filter(|img| img.series_uid == series_id)
+            .collect()
+    }
+}
+
+//------------------------------ WASM Code -------------------------------------
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[cfg(target_arch = "wasm32")]
+impl DicomRepo {
+    // console.log(JSON.parse(patientsJson)); // Display the patient data
+    pub fn get_all_patients(&self) -> Result<String, String> {
+        // Collect all patients into a vector
+        let patients: Vec<&Patient> = self.patients.values().collect();
+
+        // Serialize to JSON
+        serde_json::to_string(&patients).map_err(|err| err.to_string())
+    }
+
+    // Query a specific patient and return it as JSON
+    pub fn get_patient(&self, patient_id: &str) -> Result<String, String> {
+        self.patients
+            .get(patient_id)
+            .map(|patient| serde_json::to_string(patient).unwrap()) // Serialize patient to JSON
+            .ok_or_else(|| format!("Patient with id {} not found", patient_id))
+    }
+
+    // Query studies by patient and return them as JSON
+    pub fn get_studies_by_patient(&self, patient_id: &str) -> Result<String, String> {
+        let studies: Vec<&StudySet> = self
+            .study_sets
+            .values()
+            .filter(|study| study.patient_id == patient_id)
+            .collect();
+
+        serde_json::to_string(&studies).map_err(|err| err.to_string()) // Serialize studies to JSON
+    }
+
+    // Query series by study and return them as JSON
+    pub fn get_series_by_study(&self, study_id: &str) -> Result<String, String> {
+        let series: Vec<&ImageSeries> = self
+            .image_series
+            .values()
+            .filter(|series| series.study_uid == study_id)
+            .collect();
+
+        serde_json::to_string(&series).map_err(|err| err.to_string()) // Serialize series to JSON
+    }
+
+    // Query images by series and return them as JSON
+    pub fn get_images_by_series(&self, series_id: &str) -> Result<String, String> {
+        let images: Vec<&CTImage> = self
+            .ct_images
+            .values()
+            .filter(|image| image.series_uid == series_id)
+            .collect();
+
+        serde_json::to_string(&images).map_err(|err| err.to_string()) // Serialize images to JSON
     }
 }
