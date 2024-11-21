@@ -8,7 +8,7 @@ macro_rules! define_dicom_struct {
     // Main macro to define a struct with fields, types, DICOM tags, and optionality
     ($name:ident, { $(($field_name:ident, $field_type:ty, $dicom_tag:expr, $is_optional:tt)),* $(,)? }) => {
         // #[cfg_attr(target_arch = "wasm32", wasm_bindgen)] // Allow use in WASM
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, serde::Serialize)]
         pub struct $name {
             // Generate struct fields based on optionality
             $(
