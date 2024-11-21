@@ -1,8 +1,7 @@
-use anyhow::{Result, anyhow};
-use dicom_object::{FileDicomObject, InMemDicomObject};
-use crate::define_dicom_struct;
 use super::dicom_helper::get_value;
-
+use crate::define_dicom_struct;
+use anyhow::{anyhow, Result};
+use dicom_object::{FileDicomObject, InMemDicomObject};
 
 define_dicom_struct!(CTImage, {
     (uid, String, "(0008,0018) SOPInstanceUID", false),              // Unique identifier for the image
@@ -18,9 +17,14 @@ define_dicom_struct!(CTImage, {
     (rescale_intercept, f32, "(0028,1052) RescaleIntercept", true),  // RescaleIntercept (Optional)
     (window_center, f32, "(0028,1050) WindowCenter", true),          // WindowCenter (Optional)
     (window_width, f32, "(0028,1051) WindowWidth", true),            // WindowWidth (Optional)
-    (pixel_representation, u16, "(0028,0103) PixelRepresentation", true), // Pixel Representation (Optional, but important for interpretation)
+    (pixel_representation, u16, "(0028,0103) PixelRepresentation", false), // Pixel Representation (Mandatory, but important for interpretation)
     (pixel_data, Vec<u8>, "(7FE0,0010) PixelData", false)            // PixelData (Mandatory)
 });
+
+pub enum PixelData {
+    Unsigned(Vec<u32>),
+    Signed(Vec<i32>),
+}
 
 impl CTImage {
     // Function to parse the DICOM file and generate the CTImage structure
@@ -84,8 +88,49 @@ impl CTImage {
             rescale_intercept: get_value::<f32>(&obj, "RescaleIntercept"),
             window_center: get_value::<f32>(&obj, "WindowCenter"),
             window_width: get_value::<f32>(&obj, "WindowWidth"),
-            pixel_representation: get_value::<u16>(&obj, "PixelRepresentation"),
+            pixel_representation: get_value::<u16>(&obj, "PixelRepresentation")
+                .ok_or_else(|| anyhow!("Missing PixelRepresentation"))?,
             pixel_data: obj.element_by_name("PixelData")?.to_bytes()?.to_vec(), // Pixel data is mandatory
         })
+    }
+
+    pub fn get_pixel_data(self) -> PixelData {
+        let rescale_slope = self.rescale_slope.unwrap_or(1.0); // Default slope = 1.0
+        let rescale_intercept = self.rescale_intercept.unwrap_or(0.0); // Default intercept = 0.0
+
+        match self.pixel_representation {
+            0 => {
+                // Unsigned pixel data (e.g., 16-bit unsigned integers)
+                let data = self
+                    .pixel_data
+                    .chunks_exact(2) // Interpret each 2 bytes as one u16 value
+                    .map(|chunk| {
+                        let value = u16::from_le_bytes([chunk[0], chunk[1]]);
+                        let rescaled = rescale_slope * value as f32 + rescale_intercept;
+                        rescaled.round() as u32 // Rescale and round to nearest integer
+                    })
+                    .collect();
+                PixelData::Unsigned(data)
+            }
+            1 => {
+                // Signed pixel data (e.g., 16-bit signed integers)
+                let data = self
+                    .pixel_data
+                    .chunks_exact(2) // Interpret each 2 bytes as one i16 value
+                    .map(|chunk| {
+                        let value = i16::from_le_bytes([chunk[0], chunk[1]]);
+                        let rescaled = rescale_slope * value as f32 + rescale_intercept;
+                        rescaled.round() as i32 // Rescale and round to nearest integer
+                    })
+                    .collect();
+                PixelData::Signed(data)
+            }
+            _ => {
+                panic!(
+                    "Unsupported pixel_representation: {}",
+                    self.pixel_representation
+                );
+            }
+        }
     }
 }

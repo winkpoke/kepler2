@@ -1,8 +1,5 @@
 use kepler_wgpu::{coordinates, run};
 
-#[cfg(target_arch = "wasm32")]
-use kepler_wgpu::dicom_::read_dicom;
-
 #[cfg(not(target_arch="wasm32"))]
 #[tokio::main]
 async fn main() {
