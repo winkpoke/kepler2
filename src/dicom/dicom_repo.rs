@@ -1,22 +1,19 @@
 use std::collections::HashMap;
-use std::path::Path;
-
-use anyhow::{Result, anyhow};
-use dicom_object::{FileDicomObject, InMemDicomObject};
-use tokio::fs;
-use crate::define_dicom_struct;
-use super::dicom_helper::get_value;
 use super::patient::Patient;
 use super::studyset::StudySet;
 use super::ct_image::CTImage;
 use super::image_series::ImageSeries;
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Clone)]
 pub struct DicomRepo {
-    pub patients: HashMap<String, Patient>, // Map of patient ID to Patient
-    pub study_sets: HashMap<String, StudySet>, // Map of study ID to StudySet
-    pub image_series: HashMap<String, ImageSeries>, // Map of series ID to ImageSeries
-    pub ct_images: HashMap<String, CTImage>, // Map of image ID to CTImage
+    patients: HashMap<String, Patient>, // Map of patient ID to Patient
+    study_sets: HashMap<String, StudySet>, // Map of study ID to StudySet
+    image_series: HashMap<String, ImageSeries>, // Map of series ID to ImageSeries
+    ct_images: HashMap<String, CTImage>, // Map of image ID to CTImage
 }
 
 impl DicomRepo {
@@ -51,6 +48,10 @@ impl DicomRepo {
         self.ct_images.insert(image.uid.clone(), image);
     }
 
+    pub fn get_all_patients(&self) -> Vec<&Patient> {
+        self.patients.values().collect()
+    }
+    
     // Query patients
     pub fn get_patient(&self, patient_id: &str) -> Option<&Patient> {
         self.patients.get(patient_id)
@@ -133,7 +134,6 @@ impl DicomRepo {
                 }
             }
         }
-
         result
     }
 }

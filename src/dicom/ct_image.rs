@@ -3,6 +3,7 @@ use dicom_object::{FileDicomObject, InMemDicomObject};
 use crate::define_dicom_struct;
 use super::dicom_helper::get_value;
 
+
 define_dicom_struct!(CTImage, {
     (uid, String, "(0008,0018) SOPInstanceUID", false),              // Unique identifier for the image
     (series_uid, String, "(0020,000E) SeriesInstanceUID", false),  // SeriesID is required
@@ -23,7 +24,7 @@ define_dicom_struct!(CTImage, {
 
 impl CTImage {
     // Function to parse the DICOM file and generate the CTImage structure
-    pub fn from_file(dicom_data: &[u8]) -> Result<CTImage> {
+    pub fn from_bytes(dicom_data: &[u8]) -> Result<CTImage> {
         // Parse the DICOM file into a `FileDicomObject`
         let obj: FileDicomObject<InMemDicomObject> = FileDicomObject::from_reader(dicom_data)?;
 

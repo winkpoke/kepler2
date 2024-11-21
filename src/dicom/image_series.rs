@@ -14,7 +14,7 @@ define_dicom_struct!(ImageSeries, {
 
 impl ImageSeries {
     // Function to parse the DICOM file and generate the ImageSeries structure
-    pub fn from_file(dicom_data: &[u8]) -> Result<ImageSeries> {
+    pub fn from_bytes(dicom_data: &[u8]) -> Result<ImageSeries> {
         // Parse the DICOM file into a `FileDicomObject`
         let dicom_obj: FileDicomObject<InMemDicomObject> =
             FileDicomObject::from_reader(dicom_data)?;
