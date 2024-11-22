@@ -320,7 +320,7 @@ pub async fn run() {
             dicom::fileio::parse_dcm_directories(vec!["C:\\share\\imrt", "C:\\share\\head_mold"])
                 .await
                 .unwrap();
-        // println!("DicomRepo:\n{}", repo.to_string());
+        println!("DicomRepo:\n{}", repo.to_string());
         println!("Patients:\n{:?}", repo.get_all_patients());
         // Stop the timer
         let elapsed_time = start_time.elapsed();
@@ -331,6 +331,16 @@ pub async fn run() {
             "Parsing completed in {:.1} ms.",
             elapsed_time.as_millis_f32()
         );
+
+        let start_time = Instant::now();
+        let vol = repo.generate_ct_volume("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561");
+        let elapsed_time = start_time.elapsed();
+        println!(
+            "CTVolume being generated in {:.1} ms.",
+            elapsed_time.as_millis_f32()
+        );
+
+        println!("CT Volume:\n{:#?}", vol);
     }
 
     #[cfg(target_arch = "wasm32")]

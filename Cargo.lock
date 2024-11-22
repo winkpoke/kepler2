@@ -1349,6 +1349,7 @@ dependencies = [
  "num",
  "paste",
  "pollster",
+ "rayon",
  "serde",
  "serde_json",
  "tokio",

@@ -1,11 +1,11 @@
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use anyhow::{Result, anyhow};
-use super::patient::Patient;
-use super::studyset::StudySet;
 use super::ct_image::CTImage;
 use super::image_series::ImageSeries;
+use super::patient::Patient;
+use super::studyset::StudySet;
 use crate::ct_volume::{CTVolume, CTVolumeGenerator};
+use anyhow::{anyhow, Result};
+use std::cmp::Ordering;
+use std::collections::HashMap;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -42,8 +42,7 @@ impl DicomRepo {
 
     // Add or update an image series
     pub fn add_image_series(&mut self, series: ImageSeries) {
-        self.image_series
-            .insert(series.uid.clone(), series);
+        self.image_series.insert(series.uid.clone(), series);
     }
 
     // Add or update a CT image
@@ -77,10 +76,7 @@ impl DicomRepo {
                     .values()
                     .filter(|is| is.study_uid == study_set.uid)
                 {
-                    result.push_str(&format!(
-                        "    ImageSeries: {}\n",
-                        image_series.uid
-                    ));
+                    result.push_str(&format!("    ImageSeries: {}\n", image_series.uid));
                     result.push_str(&format!("      Modality: {}\n", image_series.modality));
                     result.push_str(&format!(
                         "      Description: {:?}\n",
@@ -108,35 +104,37 @@ impl DicomRepo {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl CTVolumeGenerator for DicomRepo {
     fn generate_ct_volume(&self, image_series_id: &str) -> Result<CTVolume> {
+        use rayon::prelude::*;
         // Retrieve the ImageSeries by ID
         let series = self
             .image_series
             .get(image_series_id)
             .ok_or_else(|| anyhow!("ImageSeries with ID '{}' not found", image_series_id))?;
-    
+
         // Collect all CTImages belonging to the ImageSeries
         let mut ct_images: Vec<&CTImage> = self
             .ct_images
             .values()
             .filter(|img| img.series_uid == series.uid)
             .collect();
-    
+
         if ct_images.is_empty() {
             return Err(anyhow!(
                 "No CTImages found for ImageSeries with ID '{}'",
                 image_series_id
             ));
         }
-    
+
         // Sort CTImages by their z-position (third component of ImagePositionPatient)
         ct_images.sort_by(|a, b| {
             let z_a = a.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
             let z_b = b.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
             z_a.partial_cmp(&z_b).unwrap_or(Ordering::Equal)
         });
-    
+
         // Validate consistency of rows, columns, and retrieve metadata from the first image
         let rows = ct_images[0].rows;
         let columns = ct_images[0].columns;
@@ -144,20 +142,26 @@ impl CTVolumeGenerator for DicomRepo {
             .pixel_spacing
             .ok_or_else(|| anyhow!("PixelSpacing is missing in the first CTImage"))?;
         let slice_thickness = ct_images[0].slice_thickness.unwrap_or(1.0);
-    
+
         // Ensure all images have consistent dimensions
-        if !ct_images.iter().all(|img| img.rows == rows && img.columns == columns) {
-            return Err(anyhow!("Inconsistent image dimensions in ImageSeries '{}'", series.uid));
-        }
-    
-        let voxel_spacing = (pixel_spacing.0, pixel_spacing.1, slice_thickness);
-    
-        // Collect voxel data from each CTImage, propagating any errors
-        let voxel_data: Result<Vec<Vec<i16>>> = ct_images
+        if !ct_images
             .iter()
+            .all(|img| img.rows == rows && img.columns == columns)
+        {
+            return Err(anyhow!(
+                "Inconsistent image dimensions in ImageSeries '{}'",
+                series.uid
+            ));
+        }
+
+        let voxel_spacing = (pixel_spacing.0, pixel_spacing.1, slice_thickness);
+
+        // Collect voxel data from each CTImage concurrently
+        let voxel_data: Result<Vec<Vec<i16>>> = ct_images
+            .par_iter() // `rayon::iter::ParallelIterator` for parallel processing
             .map(|img| img.get_pixel_data()) // `get_pixel_data` already returns Result<Vec<i16>>
             .collect(); // Collects into a Result<Vec<Vec<i16>>>
-    
+
         // Return the constructed CTVolume
         Ok(CTVolume {
             dimensions: (rows, columns, ct_images.len()),
@@ -172,7 +176,7 @@ impl DicomRepo {
     pub fn get_all_patients(&self) -> Vec<&Patient> {
         self.patients.values().collect()
     }
-    
+
     // Query patients
     pub fn get_patient(&self, patient_id: &str) -> Option<&Patient> {
         self.patients.get(patient_id)
@@ -265,4 +269,66 @@ impl DicomRepo {
 
         serde_json::to_string(&images).map_err(|err| err.to_string()) // Serialize images to JSON
     }
+
+    pub async fn generate_ct_volume(&self, image_series_id: &str) -> Result<CTVolume, JsValue> {
+        // Retrieve the ImageSeries by ID
+        let series = self
+            .image_series
+            .get(image_series_id)
+            .ok_or_else(|| JsValue::from_str(&format!("ImageSeries with ID '{}' not found", image_series_id)))?;
+        
+        // Collect all CTImages belonging to the ImageSeries
+        let mut ct_images: Vec<&CTImage> = self
+            .ct_images
+            .values()
+            .filter(|img| img.series_uid == series.uid)
+            .collect();
+        
+        if ct_images.is_empty() {
+            return Err(JsValue::from_str(&format!(
+                "No CTImages found for ImageSeries with ID '{}'",
+                image_series_id
+            )));
+        }
+        
+        // Sort CTImages by their z-position (third component of ImagePositionPatient)
+        ct_images.sort_by(|a, b| {
+            let z_a = a.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
+            let z_b = b.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
+            z_a.partial_cmp(&z_b).unwrap_or(Ordering::Equal)
+        });
+        
+        // Validate consistency of rows, columns, and retrieve metadata from the first image
+        let rows = ct_images[0].rows;
+        let columns = ct_images[0].columns;
+        let pixel_spacing = ct_images[0]
+            .pixel_spacing
+            .ok_or_else(|| JsValue::from_str("PixelSpacing is missing in the first CTImage"))?;
+        let slice_thickness = ct_images[0].slice_thickness.unwrap_or(1.0);
+        
+        // Ensure all images have consistent dimensions
+        if !ct_images.iter().all(|img| img.rows == rows && img.columns == columns) {
+            return Err(JsValue::from_str(&format!(
+                "Inconsistent image dimensions in ImageSeries '{}'",
+                series.uid
+            )));
+        }
+        
+        let voxel_spacing = (pixel_spacing.0, pixel_spacing.1, slice_thickness);
+        
+        // Collect voxel data from each CTImage sequentially
+        let mut voxel_data = Vec::new();
+        for img in &ct_images {
+            let pixels = img.get_pixel_data().map_err(|e| JsValue::from_str(&e.to_string()))?;
+            voxel_data.push(pixels);
+        }
+        
+        // Return the constructed CTVolume
+        Ok(CTVolume {
+            dimensions: (rows, columns, ct_images.len()),
+            voxel_spacing,
+            voxel_data,
+        })
+    }
+    
 }
