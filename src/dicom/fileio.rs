@@ -173,10 +173,7 @@ pub async fn parse_dcm_files_wasm(files: Array) -> Result<DicomRepo, JsValue> {
     // Shared repository and counter
     let repo = Arc::new(Mutex::new(DicomRepo::new()));
     let len = files.length() as usize;
-    error!("start parsing");
-    error!("len = {}", len);
 
-    console::log_1(&JsValue::from("start parsing"));
     // Processing each file asynchronously
     let tasks: Vec<Promise> = (0..len)
         .map(|idx| {

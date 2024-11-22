@@ -1,8 +1,11 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
+use anyhow::{Result, anyhow};
 use super::patient::Patient;
 use super::studyset::StudySet;
 use super::ct_image::CTImage;
 use super::image_series::ImageSeries;
+use crate::ct_volume::{CTVolume, CTVolumeGenerator};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -102,6 +105,65 @@ impl DicomRepo {
             }
         }
         result
+    }
+}
+
+impl CTVolumeGenerator for DicomRepo {
+    fn generate_ct_volume(&self, image_series_id: &str) -> Result<CTVolume> {
+        // Retrieve the ImageSeries by ID
+        let series = self
+            .image_series
+            .get(image_series_id)
+            .ok_or_else(|| anyhow!("ImageSeries with ID '{}' not found", image_series_id))?;
+    
+        // Collect all CTImages belonging to the ImageSeries
+        let mut ct_images: Vec<&CTImage> = self
+            .ct_images
+            .values()
+            .filter(|img| img.series_uid == series.uid)
+            .collect();
+    
+        if ct_images.is_empty() {
+            return Err(anyhow!(
+                "No CTImages found for ImageSeries with ID '{}'",
+                image_series_id
+            ));
+        }
+    
+        // Sort CTImages by their z-position (third component of ImagePositionPatient)
+        ct_images.sort_by(|a, b| {
+            let z_a = a.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
+            let z_b = b.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
+            z_a.partial_cmp(&z_b).unwrap_or(Ordering::Equal)
+        });
+    
+        // Validate consistency of rows, columns, and retrieve metadata from the first image
+        let rows = ct_images[0].rows;
+        let columns = ct_images[0].columns;
+        let pixel_spacing = ct_images[0]
+            .pixel_spacing
+            .ok_or_else(|| anyhow!("PixelSpacing is missing in the first CTImage"))?;
+        let slice_thickness = ct_images[0].slice_thickness.unwrap_or(1.0);
+    
+        // Ensure all images have consistent dimensions
+        if !ct_images.iter().all(|img| img.rows == rows && img.columns == columns) {
+            return Err(anyhow!("Inconsistent image dimensions in ImageSeries '{}'", series.uid));
+        }
+    
+        let voxel_spacing = (pixel_spacing.0, pixel_spacing.1, slice_thickness);
+    
+        // Collect voxel data from each CTImage, propagating any errors
+        let voxel_data: Result<Vec<Vec<i16>>> = ct_images
+            .iter()
+            .map(|img| img.get_pixel_data()) // `get_pixel_data` already returns Result<Vec<i16>>
+            .collect(); // Collects into a Result<Vec<Vec<i16>>>
+    
+        // Return the constructed CTVolume
+        Ok(CTVolume {
+            dimensions: (rows, columns, ct_images.len()),
+            voxel_spacing,
+            voxel_data: voxel_data?, // Propagate any error if occurs
+        })
     }
 }
 

@@ -1,7 +1,8 @@
 use super::dicom_helper::get_value;
 use crate::define_dicom_struct;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result, Context};
 use dicom_object::{FileDicomObject, InMemDicomObject};
+use std::borrow::Cow;
 
 define_dicom_struct!(CTImage, {
     (uid, String, "(0008,0018) SOPInstanceUID", false),              // Unique identifier for the image
@@ -20,11 +21,6 @@ define_dicom_struct!(CTImage, {
     (pixel_representation, u16, "(0028,0103) PixelRepresentation", false), // Pixel Representation (Mandatory, but important for interpretation)
     (pixel_data, Vec<u8>, "(7FE0,0010) PixelData", false)            // PixelData (Mandatory)
 });
-
-pub enum PixelData {
-    Unsigned(Vec<u32>),
-    Signed(Vec<i32>),
-}
 
 impl CTImage {
     // Function to parse the DICOM file and generate the CTImage structure
@@ -94,43 +90,51 @@ impl CTImage {
         })
     }
 
-    pub fn get_pixel_data(self) -> PixelData {
-        let rescale_slope = self.rescale_slope.unwrap_or(1.0); // Default slope = 1.0
-        let rescale_intercept = self.rescale_intercept.unwrap_or(0.0); // Default intercept = 0.0
+    pub fn get_pixel_data(&self) -> Result<Vec<i16>> {
+        let pixel_data = &self.pixel_data; // Original pixel data as Vec<u8>
+        let pixel_representation = self.pixel_representation;
+        let rescale_slope = self.rescale_slope.unwrap_or(1.0); // Default to 1.0 if not provided
+        let rescale_intercept = self.rescale_intercept.unwrap_or(0.0); // Default to 0.0 if not provided
 
-        match self.pixel_representation {
-            0 => {
-                // Unsigned pixel data (e.g., 16-bit unsigned integers)
-                let data = self
-                    .pixel_data
-                    .chunks_exact(2) // Interpret each 2 bytes as one u16 value
-                    .map(|chunk| {
-                        let value = u16::from_le_bytes([chunk[0], chunk[1]]);
-                        let rescaled = rescale_slope * value as f32 + rescale_intercept;
-                        rescaled.round() as u32 // Rescale and round to nearest integer
-                    })
-                    .collect();
-                PixelData::Unsigned(data)
-            }
-            1 => {
-                // Signed pixel data (e.g., 16-bit signed integers)
-                let data = self
-                    .pixel_data
-                    .chunks_exact(2) // Interpret each 2 bytes as one i16 value
-                    .map(|chunk| {
-                        let value = i16::from_le_bytes([chunk[0], chunk[1]]);
-                        let rescaled = rescale_slope * value as f32 + rescale_intercept;
-                        rescaled.round() as i32 // Rescale and round to nearest integer
-                    })
-                    .collect();
-                PixelData::Signed(data)
-            }
-            _ => {
-                panic!(
-                    "Unsupported pixel_representation: {}",
-                    self.pixel_representation
-                );
-            }
+        // Define a small epsilon for float comparison
+        const EPSILON: f32 = 1e-6;
+
+        // Case 1: No rescaling and pixel data is signed (pixel_representation == 1)
+        if (rescale_slope - 1.0).abs() < EPSILON && (rescale_intercept - 0.0).abs() < EPSILON && pixel_representation == 1 {
+            // No transformation is needed, return the data as borrowed
+            let data: Vec<i16> = pixel_data
+                .chunks_exact(2)
+                .map(|chunk| {
+                    if chunk.len() != 2 {
+                        anyhow::bail!("Invalid pixel data chunk size: expected 2 bytes, found {}", chunk.len());
+                    }
+                    Ok(i16::from_ne_bytes([chunk[0], chunk[1]])) // Example for 16-bit signed
+                })
+                .collect::<Result<_>>()
+                .context("Failed to process pixel data from DICOM file")?;
+
+            return Ok(data); 
         }
+
+        // Case 2: Transformation required (rescale or pixel_representation is different)
+        let transformed_data: Vec<i16> = pixel_data
+            .chunks_exact(2)
+            .map(|chunk| {
+                if chunk.len() != 2 {
+                    anyhow::bail!("Invalid pixel data chunk size: expected 2 bytes, found {}", chunk.len());
+                }
+                let raw_value = match pixel_representation {
+                    0 => u16::from_ne_bytes([chunk[0], chunk[1]]) as i16, // Unsigned to signed conversion
+                    1 => i16::from_ne_bytes([chunk[0], chunk[1]]),         // Already signed
+                    _ => anyhow::bail!("Unsupported pixel representation: {}", pixel_representation),
+                };
+                // Apply rescale slope and intercept
+                let transformed_value = (raw_value as f32) * rescale_slope + rescale_intercept;
+                Ok(transformed_value.round() as i16)
+            })
+            .collect::<Result<_>>()
+            .context("Failed to transform pixel data with rescale slope and intercept")?;
+
+        Ok(transformed_data)
     }
 }

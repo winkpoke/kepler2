@@ -20,12 +20,14 @@ pub mod coordinates;
 pub mod dicom;
 mod texture_3d;
 mod view;
+pub mod ct_volume;
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use dicom::*;
+use ct_volume::*;
 
 use std::time::Instant;
 
@@ -304,10 +306,6 @@ pub async fn run() {
     env_logger::init();
 
     warn!("Start the program ...");
-    // let rst = crate::dicom::read_dicom();
-    // if let Err(err) = rst {
-    //     error!("{:?}", err);
-    // }
 
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
