@@ -165,7 +165,7 @@ impl CTVolumeGenerator for DicomRepo {
 
         // Return the constructed CTVolume
         Ok(CTVolume {
-            dimensions: (rows, columns, ct_images.len()),
+            dimensions: (rows as usize, columns as usize, ct_images.len()),
             voxel_spacing,
             voxel_data,
         })

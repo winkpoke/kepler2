@@ -17,17 +17,17 @@ use view::TransverseView;
 
 // mod texture;
 pub mod coordinates;
+pub mod ct_volume;
 pub mod dicom;
 mod texture_3d;
 mod view;
-pub mod ct_volume;
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use dicom::*;
 use ct_volume::*;
+use dicom::*;
 
 use std::time::Instant;
 
@@ -189,9 +189,58 @@ impl<'a> State<'a> {
         //     include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
         // include_bytes!("../image/CT.png");
         // println!("len = {}", diffuse_bytes.len());
+        #[cfg(target_arch = "wasm32")]
         let texture =
             // texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
             texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 10).unwrap();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let texture = {
+            // Start the timer
+            let start_time = Instant::now();
+
+            let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
+            let repo = dicom::fileio::parse_dcm_directories(vec![
+                "C:\\share\\imrt",
+                "C:\\share\\head_mold",
+            ])
+            .await
+            .unwrap();
+            println!("DicomRepo:\n{}", repo.to_string());
+            println!("Patients:\n{:?}", repo.get_all_patients());
+            // Stop the timer
+            let elapsed_time = start_time.elapsed();
+
+            // Print the repository and performance details
+            // println!("Parsed repository: {:?}", repo);
+            println!(
+                "Parsing completed in {:.1} ms.",
+                elapsed_time.as_millis_f32()
+            );
+
+            let start_time = Instant::now();
+            let vol = repo
+                .generate_ct_volume("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561")
+                .unwrap();
+            let elapsed_time = start_time.elapsed();
+            println!(
+                "CTVolume being generated in {:.1} ms.",
+                elapsed_time.as_millis_f32()
+            );
+
+            println!("CT Volume:\n{:#?}", vol);
+            let voxel_data: Vec<u16> = vol.voxel_data.iter().map(|x| (*x + 1000) as u16).collect();
+            let voxel_data: &[u8] = bytemuck::cast_slice(&voxel_data);
+            texture_3d::Texture::from_bytes(
+                &device,
+                &queue,
+                voxel_data,
+                "CT Volume",
+                vol.dimensions.0 as u32,
+                vol.dimensions.1 as u32,
+                vol.dimensions.2 as u32,
+            ).unwrap()
+        };
 
         println!("supported texture formats: {:?}", surface_caps.formats);
         println!("format: {:?}", config.format);
@@ -290,7 +339,7 @@ impl<'a> State<'a> {
 pub async fn init() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
-} 
+}
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub async fn run() {
@@ -309,39 +358,6 @@ pub async fn run() {
 
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-
-    #[cfg(not(target_arch="wasm32"))]
-    {
-        // Start the timer
-        let start_time = Instant::now();
-
-        let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
-        let repo =
-            dicom::fileio::parse_dcm_directories(vec!["C:\\share\\imrt", "C:\\share\\head_mold"])
-                .await
-                .unwrap();
-        println!("DicomRepo:\n{}", repo.to_string());
-        println!("Patients:\n{:?}", repo.get_all_patients());
-        // Stop the timer
-        let elapsed_time = start_time.elapsed();
-
-        // Print the repository and performance details
-        // println!("Parsed repository: {:?}", repo);
-        println!(
-            "Parsing completed in {:.1} ms.",
-            elapsed_time.as_millis_f32()
-        );
-
-        let start_time = Instant::now();
-        let vol = repo.generate_ct_volume("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561");
-        let elapsed_time = start_time.elapsed();
-        println!(
-            "CTVolume being generated in {:.1} ms.",
-            elapsed_time.as_millis_f32()
-        );
-
-        println!("CT Volume:\n{:#?}", vol);
-    }
 
     #[cfg(target_arch = "wasm32")]
     {

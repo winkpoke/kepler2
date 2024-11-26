@@ -9,7 +9,7 @@ use wasm_bindgen::prelude::*;
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Clone)]
 pub struct CTVolume {
-    pub(crate) dimensions: (u16, u16, usize), // (rows, columns, number of slices)
+    pub(crate) dimensions: (usize, usize, usize), // (rows, columns, number of slices)
     pub(crate) voxel_spacing: (f32, f32, f32), // (spacing_x, spacing_y, spacing_z)
     // pub(crate) voxel_data: Vec<Vec<i16>>, // 3D voxel data flattened into slices
     pub(crate) voxel_data: Vec<i16>, // 3D voxel data 

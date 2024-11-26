@@ -71,7 +71,8 @@ var<uniform> u_uniform_frag: UniformsFrag;
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // // Create a 3D coordinate using in.tex_coords and the slice
     let depth = u_uniform_frag.slice; // Ensure this is set correctly
-    let tex_coords_3d = vec3<f32>(in.tex_coords, depth);
+    // let tex_coords_3d = vec3<f32>(in.tex_coords, depth);
+    let tex_coords_3d = vec3<f32>(in.tex_coords.x, depth * 0.2 + 0.4, (1 - in.tex_coords.y) * 1.5);
 
     let sampled_value: vec4<f32> = textureSample(t_diffuse, s_diffuse, tex_coords_3d);
 
