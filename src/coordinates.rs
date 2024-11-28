@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Matrix4x4<T> {
     pub data: [[T; 4]; 4], // row major
 }
@@ -38,39 +38,41 @@ impl<
     }
 
     pub fn inv(&self) -> Option<Matrix4x4<T>> {
-        let mut augmented = [[num::zero(); 8]; 4]; // Augmented matrix [A | I]
-
+        let mut augmented = [[T::zero(); 8]; 4]; // Augmented matrix [A | I]
+    
         // Create the augmented matrix [A | I]
         for i in 0..4 {
             for j in 0..4 {
                 augmented[i][j] = self.data[i][j];
             }
-            augmented[i][i + 4] = num::one(); // Identity matrix
+            augmented[i][i + 4] = T::one(); // Identity matrix on the right side
         }
-
+    
         // Perform Gaussian elimination
         for i in 0..4 {
-            // Search for maximum in this column
+            // Step 1: Find the pivot row by looking for the largest element in the column
             let mut max_row = i;
             for k in i + 1..4 {
                 if augmented[k][i].abs() > augmented[max_row][i].abs() {
                     max_row = k;
                 }
             }
-
-            // Swap maximum row with current row (pivoting)
-            augmented.swap(i, max_row);
-
-            // Make the diagonal contain all 1s
-            let diag = augmented[i][i];
-            if diag.is_zero() {
+    
+            // If pivot is zero, matrix is singular and cannot be inverted
+            if augmented[max_row][i].is_zero() {
                 return None; // Matrix is singular
             }
+    
+            // Step 2: Swap the current row with the row containing the pivot element
+            augmented.swap(i, max_row);
+    
+            // Step 3: Scale the pivot row to make the pivot element equal to 1
+            let pivot = augmented[i][i];
             for j in 0..8 {
-                augmented[i][j] /= diag;
+                augmented[i][j] /= pivot;
             }
-
-            // Make the other rows contain 0s in this column
+    
+            // Step 4: Eliminate the other rows by making them 0 in the current column
             for k in 0..4 {
                 if k != i {
                     let factor = augmented[k][i];
@@ -80,6 +82,7 @@ impl<
                 }
             }
         }
+    
         // Extract the right half of the augmented matrix, which is the inverse
         let mut inverse = [[T::zero(); 4]; 4];
         for i in 0..4 {
@@ -87,20 +90,21 @@ impl<
                 inverse[i][j] = augmented[i][j + 4];
             }
         }
-
+    
         Some(Matrix4x4 { data: inverse })
     }
+    
 
     pub fn apply(&self, v: &[T; 4]) -> [T; 4] {
-        let mut result = [v[0]; 4]; // Initialize result vector
-
+        let mut result = [T::zero(); 4]; // Initialize result vector with zeros
+    
         for i in 0..4 {
             result[i] = self.data[i][0] * v[0]
                 + self.data[i][1] * v[1]
                 + self.data[i][2] * v[2]
                 + self.data[i][3] * v[3];
         }
-
+    
         result
     }
 

@@ -42,10 +42,17 @@ fn vs_main(
         0.0,               0.0,  0.0,               1.0
     );
 
+    let scale = mat4x4<f32>(
+        2.0, 0.0, 0.0, 0.0,
+        0.0, 2.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.5, 0.0, 0.0, 1.0,
+    );
+
     // Set the output
     out.tex_coords = model.tex_coords;
     // out.clip_position = vec4<f32>(model.position, 1.0);
-    out.clip_position = rotation_matrix_z * rotation_matrix_y * vec4<f32>(model.position, 1.0);
+    out.clip_position = rotation_matrix_z * rotation_matrix_y * scale * vec4<f32>(model.position, 1.0);
     out.clip_position.z += 0.5;
     return out;
 }
@@ -72,7 +79,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // // Create a 3D coordinate using in.tex_coords and the slice
     let depth = u_uniform_frag.slice; // Ensure this is set correctly
     // let tex_coords_3d = vec3<f32>(in.tex_coords, depth);
-    let tex_coords_3d = vec3<f32>(in.tex_coords.x, depth * 0.2 + 0.4, (1 - in.tex_coords.y) * 1.5);
+    let tex_coords_3d = vec3<f32>(in.tex_coords.x, depth * 0.2 + 0.5, 2.04-in.tex_coords.y * 3.08);
 
     let sampled_value: vec4<f32> = textureSample(t_diffuse, s_diffuse, tex_coords_3d);
 
