@@ -31,5 +31,5 @@ pub trait CTVolumeGenerator {
 
 pub struct Geometry {
     volumes: Vec<CTVolume>,
-    base: crate::coordinates::Matrix4x4<f32>,
+    base: crate::coord::Matrix4x4<f32>,
 }

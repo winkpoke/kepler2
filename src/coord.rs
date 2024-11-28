@@ -118,6 +118,22 @@ impl<
             ],
         }
     }
+    
+     // Transpose the matrix (swap rows and columns)
+     pub fn transpose(&self) -> Matrix4x4<T> {
+        let mut transposed_data = [[T::zero(); 4]; 4]; // Initialize a 4x4 matrix with zeros
+
+        // Swap rows and columns
+        for i in 0..4 {
+            for j in 0..4 {
+                transposed_data[j][i] = self.data[i][j];
+            }
+        }
+
+        Matrix4x4 {
+            data: transposed_data,
+        }
+    }
 }
 impl<T> Mul for Matrix4x4<T>
 where

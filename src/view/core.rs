@@ -1,5 +1,6 @@
 use wgpu::util::DeviceExt;
 use crate::texture_3d::Texture;
+use crate::geometry::GeometryBuilder;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -16,13 +17,14 @@ pub struct UniformsFrag {
     pub level: f32,
     pub slice: f32,
     pub _padding: [f32; 1],
+    pub mat: [f32; 16],
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Uniforms {
-    pub vert: UniformsVert,
-    pub frag: UniformsFrag,
+    pub(crate) vert: UniformsVert,
+    pub(crate) frag: UniformsFrag,
 }
 
 #[repr(C)]
@@ -88,7 +90,7 @@ impl View {
             rotation_angle_y: 0.0,
             rotation_angle_z: 0.0,
             ..Default::default()
-        };
+        };       
         let u_frag_data = UniformsFrag {
             window: 350.,
             level: 1140.,

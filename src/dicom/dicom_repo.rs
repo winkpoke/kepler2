@@ -322,18 +322,19 @@ impl DicomRepo {
 
         let voxel_spacing = (pixel_spacing.0, pixel_spacing.1, slice_thickness);
 
+        // Pre-allocate the vector with enough capacity to hold all voxel data
+        let total_voxels = rows as usize * columns as usize * ct_images.len();
+        let mut voxel_data: Vec<i16> = Vec::with_capacity(total_voxels);
+        
         // Collect voxel data from each CTImage sequentially
-        let mut voxel_data = Vec::new();
         for img in &ct_images {
-            let pixels = img
-                .get_pixel_data()
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
-            voxel_data.push(pixels);
+            let data = img.get_pixel_data().map_err(|e| JsValue::from_str(&e.to_string()))?; // Manually convert the error; // Retrieve pixel data for the image
+            voxel_data.extend(data); // Append the data to the voxel_data vector
         }
 
         // Return the constructed CTVolume
         Ok(CTVolume {
-            dimensions: (rows, columns, ct_images.len()),
+            dimensions: (rows as usize, columns as usize, ct_images.len()),
             voxel_spacing,
             voxel_data,
         })

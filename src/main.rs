@@ -1,4 +1,4 @@
-use kepler_wgpu::{coordinates, run};
+use kepler_wgpu::{coord, run};
 
 #[cfg(not(target_arch="wasm32"))]
 #[tokio::main]
@@ -7,14 +7,14 @@ async fn main() {
              0., 1., 0., 0., 
              0., 0., 1., 0., 
              0., 0., 0., 1.];
-    let matrix = kepler_wgpu::coordinates::Matrix4x4::<f64>::from_array(m);
+    let matrix = kepler_wgpu::coord::Matrix4x4::<f64>::from_array(m);
     println!("{:?}", matrix);
     println!("{:?}", matrix.apply(&[3., 2., 1., 1.]));
-    let base0 = kepler_wgpu::coordinates::Base::<f64> {
+    let base0 = kepler_wgpu::coord::Base::<f64> {
         label: "world coordinate".to_string(),
-        matrix: kepler_wgpu::coordinates::Matrix4x4::<f64>::eye(),
+        matrix: kepler_wgpu::coord::Matrix4x4::<f64>::eye(),
     };
-    let base1 = kepler_wgpu::coordinates::Base::<f64> {
+    let base1 = kepler_wgpu::coord::Base::<f64> {
         label: "system coordinate".to_string(),
         matrix: matrix,
     };

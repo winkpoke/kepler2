@@ -46,7 +46,7 @@ fn vs_main(
         2.0, 0.0, 0.0, 0.0,
         0.0, 2.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
-        0.5, 0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0, 1.0,
     );
 
     // Set the output
@@ -69,6 +69,7 @@ struct UniformsFrag {
     level: f32,
     slice: f32,
     _padding: f32,
+	mat: mat4x4<f32>,
 }
 
 @group(2) @binding(0)

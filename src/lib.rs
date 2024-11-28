@@ -1,5 +1,6 @@
 #![feature(duration_millis_float)]
 
+use geometry::GeometryBuilder;
 use log::{debug, error, info, warn};
 use wgpu::Label;
 use std::{iter, sync::Arc};
@@ -17,9 +18,10 @@ use view::Renderable;
 use view::TransverseView;
 
 // mod texture;
-pub mod coordinates;
+pub mod coord;
 pub mod ct_volume;
 pub mod dicom;
+pub mod geometry;
 mod texture_3d;
 mod view;
 
@@ -228,46 +230,8 @@ impl<'a> State<'a> {
                 "CTVolume being generated in {:.1} ms.",
                 elapsed_time.as_millis_f32()
             );
-            let mut ct_images = repo.get_images_by_series("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561");
-            ct_images.sort_by(|a, b| {
-                let z_a = a.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
-                let z_b = b.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
-                z_a.partial_cmp(&z_b).unwrap_or(std::cmp::Ordering::Equal)
-            });
-            let ct_image = ct_images[0];
-            let (ox, oy, oz0) = ct_images[0].image_position_patient.unwrap();
-            let (_, _, oz1) = ct_images.last().unwrap().image_position_patient.unwrap();
-            let dz = oz1 - oz0;
-            let nx = ct_image.rows as f32;
-            let ny = ct_image.columns as f32;
-            let space = ct_image.pixel_spacing.unwrap();
-
-            use crate::coordinates::*;
-            let m_uv = [nx*space.0, 0.0,        0.0, ox,
-                        0.0,        ny*space.1, 0.0, oy,
-                        0.0,        0.0,        dz,  oz0,
-                        0.0,        0.0,        0.0, 1.0];
-            let matrix_uv = Matrix4x4::<f32>::from_array(m_uv);
-            println!("{:?}", matrix_uv);
-            let d = f32::max(nx * space.0, ny * space.1);
-            let m_screen = [d,    0.0,  0.0, ox,
-                            0.0,  0.0,  d,   oy,
-                            0.0,  -d,   0.0, (oz0+oz1)/2.0+d/2.0,
-                            0.0,  0.0,  0.0, 1.0];
-            let matrix_screen = Matrix4x4::<f32>::from_array(m_screen);
-            println!("{:?}", matrix_screen);
-            
-            
-            let base_uv = Base::<f32> {
-                label: "CT Volume: UV".to_string(),
-                matrix: matrix_uv,
-            };
-            println!("{:?}", matrix_uv.inv());
-
-            let base_screen = Base::<f32> {
-                label: "CT Volume: screen".to_string(),
-                matrix: matrix_screen,
-            };
+            let base_screen = GeometryBuilder::build_screen_base(&repo);
+            let base_uv = GeometryBuilder::build_uv_base(&repo);
             let base = base_screen.to_base(&base_uv);
             println!("{:?}", base);
 
