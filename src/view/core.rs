@@ -1,4 +1,5 @@
 use wgpu::util::DeviceExt;
+use crate::coord::{array_to_slice, Matrix4x4};
 use crate::texture_3d::Texture;
 use crate::geometry::GeometryBuilder;
 
@@ -85,6 +86,7 @@ impl View {
         device: &wgpu::Device,
         texture: &Texture,
         wgsl_path: &'static str,
+        transform_matrix: Matrix4x4<f32>
     ) -> View {
         let u_vert_data = UniformsVert {
             rotation_angle_y: 0.0,
@@ -95,6 +97,7 @@ impl View {
             window: 350.,
             level: 1140.,
             slice: 0.0,
+            mat: *array_to_slice(&transform_matrix.data),
             ..Default::default()
         };
         let uniforms = Uniforms {

@@ -196,24 +196,24 @@ impl<'a> State<'a> {
         let texture =
             // texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
             texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 10).unwrap();
+        
+        // Start the timer
+        let start_time = Instant::now();
+
+        let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
+        let repo = dicom::fileio::parse_dcm_directories(vec![
+            "C:\\share\\imrt",
+            "C:\\share\\head_mold",
+        ])
+        .await
+        .unwrap();
+        println!("DicomRepo:\n{}", repo.to_string());
+        println!("Patients:\n{:?}", repo.get_all_patients());
+        // Stop the timer
+        let elapsed_time = start_time.elapsed();
 
         #[cfg(not(target_arch = "wasm32"))]
         let texture = {
-            // Start the timer
-            let start_time = Instant::now();
-
-            let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
-            let repo = dicom::fileio::parse_dcm_directories(vec![
-                "C:\\share\\imrt",
-                "C:\\share\\head_mold",
-            ])
-            .await
-            .unwrap();
-            println!("DicomRepo:\n{}", repo.to_string());
-            println!("Patients:\n{:?}", repo.get_all_patients());
-            // Stop the timer
-            let elapsed_time = start_time.elapsed();
-
             // Print the repository and performance details
             // println!("Parsed repository: {:?}", repo);
             println!(
@@ -230,10 +230,10 @@ impl<'a> State<'a> {
                 "CTVolume being generated in {:.1} ms.",
                 elapsed_time.as_millis_f32()
             );
-            let base_screen = GeometryBuilder::build_screen_base(&repo);
-            let base_uv = GeometryBuilder::build_uv_base(&repo);
-            let base = base_screen.to_base(&base_uv);
-            println!("{:?}", base);
+            // let base_screen = GeometryBuilder::build_screen_base(&repo);
+            // let base_uv = GeometryBuilder::build_uv_base(&repo);
+            // let base = base_screen.to_base(&base_uv);
+            // println!("{:?}", base);
 
             println!("CT Volume:\n{:#?}", vol);
             let voxel_data: Vec<u16> = vol.voxel_data.iter().map(|x| (*x + 1000) as u16).collect();
@@ -254,7 +254,7 @@ impl<'a> State<'a> {
         println!("format: {:?}", config.format);
         let mut transverse_view = Vec::<TransverseView>::new();
         for i in 0..4 {
-            let view = TransverseView::new(&device, &texture, i, 0.00, 0.005 * (i as f32) / 2.0);
+            let view = TransverseView::new(&device, &texture, i, 0.00, 0.005 * (i as f32) / 2.0, &repo);
             transverse_view.push(view);
         }
         // let sagittal_view = SagittalView {

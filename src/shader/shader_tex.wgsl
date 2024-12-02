@@ -80,7 +80,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // // Create a 3D coordinate using in.tex_coords and the slice
     let depth = u_uniform_frag.slice; // Ensure this is set correctly
     // let tex_coords_3d = vec3<f32>(in.tex_coords, depth);
-    let tex_coords_3d = vec3<f32>(in.tex_coords.x, depth * 0.2 + 0.5, 2.04-in.tex_coords.y * 3.08);
+    // let tex_coords_3d = vec3<f32>(in.tex_coords.x, depth * 0.2 + 0.5, 2.04-in.tex_coords.y * 3.08);
+
+    let tex_coords_3d = (u_uniform_frag.mat * vec4<f32>(in.tex_coords.x, in.tex_coords.y, depth * 0.2 + 0.5, 1)).xyz;
 
     let sampled_value: vec4<f32> = textureSample(t_diffuse, s_diffuse, tex_coords_3d);
 

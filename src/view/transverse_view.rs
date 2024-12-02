@@ -1,4 +1,5 @@
-use crate::view;
+use crate::geometry::GeometryBuilder;
+use crate::{view, DicomRepo};
 use crate::texture_3d::Texture;
 
 pub struct TransverseView {
@@ -9,9 +10,19 @@ pub struct TransverseView {
 }
 
 impl TransverseView {
-    pub fn new(device: &wgpu::Device, texture: &Texture, idx: i32, r_speed: f32, s_speed: f32) -> Self {
+    pub fn new(device: &wgpu::Device, texture: &Texture, idx: i32, r_speed: f32, s_speed: f32, repo: &DicomRepo) -> Self {
+        let base_screen = GeometryBuilder::build_screen_base(&repo);
+        let base_uv = GeometryBuilder::build_uv_base(&repo);
+
+        let transform_matrix = base_screen.to_base(&base_uv);
+        println!("row major: {:?}", transform_matrix);
+
+        let transform_matrix = transform_matrix.transpose(); // row major to column major
+        println!("column major: {:?}", transform_matrix);
+
         let wgsl_path: &str = include_str!("../shader/shader_tex.wgsl");
-        let view = view::View::new(&device, &texture, wgsl_path);
+        let view = view::View::new(&device, &texture, wgsl_path, transform_matrix);
+
         Self {
             view,
             r_speed,
