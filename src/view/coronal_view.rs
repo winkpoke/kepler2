@@ -2,16 +2,16 @@ use crate::geometry::GeometryBuilder;
 use crate::{view, DicomRepo};
 use crate::texture_3d::Texture;
 
-pub struct TransverseView {
+pub struct CoronalView {
     view: view::View,
     r_speed: f32,
     s_speed: f32,
     idx: i32,
 }
 
-impl TransverseView {
+impl CoronalView {
     pub fn new(device: &wgpu::Device, texture: &Texture, idx: i32, r_speed: f32, s_speed: f32, repo: &DicomRepo) -> Self {
-        let base_screen = GeometryBuilder::build_transverse_base(&repo);
+        let base_screen = GeometryBuilder::build_coronal_base(&repo);
         let base_uv = GeometryBuilder::build_uv_base(&repo);
 
         let transform_matrix = base_screen.to_base(&base_uv);
@@ -32,7 +32,7 @@ impl TransverseView {
     }
 }
 
-impl view::Renderable for TransverseView {
+impl view::Renderable for CoronalView {
     fn update(&mut self, queue: &wgpu::Queue) {
         // Update the rotation angle, e.g., incrementing it over time
         self.view.uniforms.vert.rotation_angle_y += self.r_speed; //0.05; // Update rotation angle

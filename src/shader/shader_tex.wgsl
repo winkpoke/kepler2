@@ -79,7 +79,8 @@ var<uniform> u_uniform_frag: UniformsFrag;
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Ensure that the depth is correctly set and within valid bounds
     let depth = u_uniform_frag.slice;  // Ensure this is set correctly
-    let tex_coords_3d = (u_uniform_frag.mat * vec4<f32>(in.tex_coords.x, in.tex_coords.y, depth * 0.2 + 0.5, 1)).xyz;
+    // let tex_coords_3d = (u_uniform_frag.mat * vec4<f32>(in.tex_coords.x, in.tex_coords.y, depth * 0.2 + 0.5, 1)).xyz;
+    let tex_coords_3d = (u_uniform_frag.mat * vec4<f32>(in.tex_coords.x, in.tex_coords.y, depth, 1)).xyz;
 
     // If the texture coordinates are out of bounds, return black (or transparent if you prefer)
     if any(tex_coords_3d < vec3<f32>(0.0) || tex_coords_3d > vec3<f32>(1.0)) {

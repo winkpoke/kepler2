@@ -13,9 +13,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use view::Renderable;
-// use view::TransverseView;
-use view::TransverseView;
+use view::{CoronalView, ObliqueView, Renderable, SagittalView, TransverseView};
 
 // mod texture;
 pub mod coord;
@@ -54,46 +52,6 @@ fn list_files_in_directory(dir: &str) -> io::Result<Vec<PathBuf>> {
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-struct SagittalView {
-    view: view::View,
-}
-
-impl view::Renderable for SagittalView {
-    fn update(&mut self, queue: &wgpu::Queue) {
-        // Update the rotation angle, e.g., incrementing it over time
-        self.view.uniforms.vert.rotation_angle_y -= 0.01; // Update rotation angle
-        self.view.uniforms.vert.rotation_angle_z -= 0.01; // Update rotation angle
-        if self.view.uniforms.frag.slice <= 0.0 {
-            self.view.uniforms.frag.slice = 1.0;
-        } else {
-            self.view.uniforms.frag.slice -= 0.01;
-        }
-
-        queue.write_buffer(
-            &self.view.uniform_vert_buffer,
-            0,
-            bytemuck::cast_slice(&[self.view.uniforms.vert]),
-        );
-        queue.write_buffer(
-            &self.view.uniform_frag_buffer,
-            0,
-            bytemuck::cast_slice(&[self.view.uniforms.frag]),
-        );
-    }
-
-    fn render(&mut self, render_pass: &mut wgpu::RenderPass) -> Result<(), wgpu::SurfaceError> {
-        render_pass.set_pipeline(&self.view.render_pipeline); // 2.
-        render_pass.set_viewport(800.0, 0.0, 800.0, 800.0, 0.0, 1.0);
-        render_pass.set_bind_group(0, &self.view.texture_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.view.uniform_vert_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.view.uniform_frag_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.view.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.view.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..self.view.num_indices, 0, 0..1);
-        Ok(())
-    }
-}
-
 struct State<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
@@ -105,8 +63,10 @@ struct State<'a> {
     // unsafe references to the window's resources.
     window: &'a Window,
     texture: texture_3d::Texture,
-    transverse_view: Vec<TransverseView>,
-    // sagittal_view: SagittalView,
+    transverse_view: TransverseView,
+    sagittal_view: SagittalView,
+    coronal_view: CoronalView,
+    oblique_view: ObliqueView,
 }
 
 impl<'a> State<'a> {
@@ -252,14 +212,16 @@ impl<'a> State<'a> {
 
         println!("supported texture formats: {:?}", surface_caps.formats);
         println!("format: {:?}", config.format);
-        let mut transverse_view = Vec::<TransverseView>::new();
-        for i in 0..4 {
-            let view = TransverseView::new(&device, &texture, i, 0.00, 0.005 * (i as f32) / 2.0, &repo);
-            transverse_view.push(view);
-        }
-        // let sagittal_view = SagittalView {
-        //     view: view::View::new(&device, &texture, wgsl_path),
-        // };
+        // let mut transverse_view = Vec::<TransverseView>::new();
+        // for i in 0..4 {
+        //     let view = TransverseView::new(&device, &texture, i, 0.00, 0.005 * (i as f32) / 2.0, &repo);
+        //     transverse_view.push(view);
+        // }
+
+        let transverse_view = TransverseView::new(&device, &texture, 0, 0.00, 0.005 / 2.0, &repo);
+        let sagittal_view = SagittalView::new(&device, &texture, 1, 0.00, 0.005 / 2.0, &repo);
+        let coronal_view = CoronalView::new(&device, &texture, 2, 0.00, 0.005 / 2.0, &repo);
+        let oblique_view = ObliqueView::new(&device, &texture, 3, 0.00, 0.005 / 2.0, &repo);
 
         Self {
             surface,
@@ -270,7 +232,9 @@ impl<'a> State<'a> {
             window,
             texture,
             transverse_view,
-            // sagittal_view,
+            sagittal_view,
+            coronal_view,
+            oblique_view,
         }
     }
 
@@ -293,10 +257,13 @@ impl<'a> State<'a> {
     }
 
     fn update(&mut self) {
-        for i in 0..self.transverse_view.len() {
-            self.transverse_view[i].update(&self.queue);
-        }
-        // self.sagittal_view.update(&self.queue);
+        // for i in 0..self.transverse_view.len() {
+        //     self.transverse_view[i].update(&self.queue);
+        // }
+        self.transverse_view.update(&self.queue);
+        self.sagittal_view.update(&self.queue);
+        self.coronal_view.update(&self.queue);
+        self.oblique_view.update(&self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -330,10 +297,13 @@ impl<'a> State<'a> {
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
-            for i in 0..self.transverse_view.len() {
-                self.transverse_view[i].render(&mut render_pass)?;
-            }
-            // self.sagittal_view.render(&mut render_pass)?;
+            // for i in 0..self.transverse_view.len() {
+            //     self.transverse_view[i].render(&mut render_pass)?;
+            // }
+            self.transverse_view.render(&mut render_pass)?;
+            self.sagittal_view.render(&mut render_pass)?;
+            self.coronal_view.render(&mut render_pass)?;
+            self.oblique_view.render(&mut render_pass)?;
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
