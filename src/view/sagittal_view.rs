@@ -15,7 +15,7 @@ impl SagittalView {
         let base_uv = GeometryBuilder::build_uv_base(&repo);
 
         let transform_matrix = base_screen.to_base(&base_uv);
-        println!("row major: {:?}", transform_matrix);
+        println!("row major:\n{:?}", transform_matrix);
 
         let transform_matrix = transform_matrix.transpose(); // row major to column major
         println!("column major: {:?}", transform_matrix);

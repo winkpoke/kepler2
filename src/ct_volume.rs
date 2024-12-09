@@ -4,6 +4,8 @@ use std::fmt;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::coord::Base;
+
 
 // Define the CTVolume struct to hold 3D data
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -13,6 +15,7 @@ pub struct CTVolume {
     pub(crate) voxel_spacing: (f32, f32, f32), // (spacing_x, spacing_y, spacing_z)
     // pub(crate) voxel_data: Vec<Vec<i16>>, // 3D voxel data flattened into slices
     pub(crate) voxel_data: Vec<i16>, // 3D voxel data 
+    // pub(crate) base: Base<f32>,
 }
 
 impl fmt::Debug for CTVolume {
@@ -21,6 +24,10 @@ impl fmt::Debug for CTVolume {
             .field("dimensions", &self.dimensions)
             .field("voxel_spacing", &self.voxel_spacing)
             .field("voxel_data", &format!("{} slices", self.voxel_data.len()))
+            // .field("base", &self.base.as_ref().map(|b| {
+            //     let matrix_debug = &b.matrix; // The matrix inside the base
+            //     format!("{} | Matrix: {:?}", b.label, matrix_debug)
+            // }))
             .finish()
     }
 }

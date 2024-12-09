@@ -1,6 +1,6 @@
-use std::ops::Mul;
+use std::{fmt, ops::Mul};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct Matrix4x4<T> {
     pub data: [[T; 4]; 4], // row major
 }
@@ -135,6 +135,7 @@ impl<
         }
     }
 }
+
 impl<T> Mul for Matrix4x4<T>
 where
     T: Copy
@@ -151,6 +152,25 @@ where
     }
 }
 
+impl<T: fmt::Debug> fmt::Debug for Matrix4x4<T> {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
+        print!("[");
+        print!("{}", &format_matrix(&self.data));
+        print!("]");
+        println!("");
+        Ok(())
+    }
+}
+
+fn format_matrix<T: fmt::Debug>(matrix: &[[T; 4]; 4]) -> String {
+    matrix
+        .iter()
+        .map(|row| format!("{:?}", row))
+        .collect::<Vec<String>>()
+        .join("\n ") // Join the rows with newlines
+}
+
+#[derive(Clone)]
 pub struct Base<T>
 where
     T: Copy
