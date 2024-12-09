@@ -183,6 +183,24 @@ where
     }
 }
 
+impl<T> Default for Base<T>
+where
+    T: Copy
+        + num::Zero
+        + num::One
+        + num::Signed
+        + PartialOrd
+        + std::ops::DivAssign
+        + std::ops::SubAssign,
+{
+    fn default() -> Self {
+        Self {
+            label: String::from("Default"),
+            matrix: Matrix4x4::eye(),
+        }
+    }
+}
+
 pub fn array_to_slice<T>(matrix: &[[T; 4]; 4]) -> &[T; 16] {
     // Safe to cast because we know the underlying representation is the same
     unsafe { &*(matrix as *const [[T; 4]; 4] as *const [T; 16]) }
