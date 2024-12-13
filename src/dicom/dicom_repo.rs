@@ -8,7 +8,6 @@ use anyhow::{anyhow, Result};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Clone)]
 pub struct DicomRepo {
@@ -101,16 +100,17 @@ impl DicomRepo {
         }
         result
     }
-}
 
-#[cfg(not(target_arch = "wasm32"))]
-impl CTVolumeGenerator for DicomRepo {
-    fn generate_ct_volume(&self, image_series_id: &str) -> Result<CTVolume> {
+    // Common function to generate CTVolume (shared code)
+    pub fn generate_ct_volume_common(
+        &self,
+        image_series_id: &str,
+    ) -> Result<CTVolume, String> {
         // Retrieve the ImageSeries by ID
         let series = self
             .image_series
             .get(image_series_id)
-            .ok_or_else(|| anyhow!("ImageSeries with ID '{}' not found", image_series_id))?;
+            .ok_or_else(|| format!("ImageSeries with ID '{}' not found", image_series_id))?;
 
         // Collect all CTImages belonging to the ImageSeries
         let mut ct_images: Vec<&CTImage> = self
@@ -120,25 +120,25 @@ impl CTVolumeGenerator for DicomRepo {
             .collect();
 
         if ct_images.is_empty() {
-            return Err(anyhow!(
+            return Err(format!(
                 "No CTImages found for ImageSeries with ID '{}'",
                 image_series_id
             ));
         }
 
-        // Sort CTImages by their z-position
+        // Sort CTImages by their z-position (third component of ImagePositionPatient)
         ct_images.sort_by(|a, b| {
             let z_a = a.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
             let z_b = b.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
             z_a.partial_cmp(&z_b).unwrap_or(Ordering::Equal)
         });
 
-        // Validate consistency of rows, columns, and metadata from the first image
+        // Validate consistency of rows, columns, and retrieve metadata from the first image
         let rows = ct_images[0].rows;
         let columns = ct_images[0].columns;
         let pixel_spacing = ct_images[0]
             .pixel_spacing
-            .ok_or_else(|| anyhow!("PixelSpacing is missing in the first CTImage"))?;
+            .ok_or_else(|| "PixelSpacing is missing in the first CTImage".to_string())?;
         let slice_thickness = ct_images[0].slice_thickness.unwrap_or(1.0);
 
         // Ensure all images have consistent dimensions
@@ -146,7 +146,7 @@ impl CTVolumeGenerator for DicomRepo {
             .iter()
             .all(|img| img.rows == rows && img.columns == columns)
         {
-            return Err(anyhow!(
+            return Err(format!(
                 "Inconsistent image dimensions in ImageSeries '{}'",
                 series.uid
             ));
@@ -158,8 +158,9 @@ impl CTVolumeGenerator for DicomRepo {
         let total_voxels = rows as usize * columns as usize * ct_images.len();
         let mut voxel_data: Vec<i16> = Vec::with_capacity(total_voxels);
 
+        // Collect voxel data from each CTImage sequentially
         for img in &ct_images {
-            let data = img.get_pixel_data()?; // Retrieve pixel data for the image
+            let data = img.get_pixel_data().map_err(|e| e.to_string())?; // Retrieve pixel data for the image
             voxel_data.extend(data); // Append the data to the voxel_data vector
         }
 
@@ -169,6 +170,16 @@ impl CTVolumeGenerator for DicomRepo {
             voxel_spacing,
             voxel_data,
         })
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl CTVolumeGenerator for DicomRepo {
+    // Non-WASM synchronous implementation
+    fn generate_ct_volume(&self, image_series_id: &str) -> Result<CTVolume, anyhow::Error> {
+        // Call the common function and handle errors
+        self.generate_ct_volume_common(image_series_id)
+            .map_err(|e| anyhow::anyhow!(e))
     }
 }
 
@@ -270,73 +281,15 @@ impl DicomRepo {
 
         serde_json::to_string(&images).map_err(|err| err.to_string()) // Serialize images to JSON
     }
+}
 
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[cfg(target_arch = "wasm32")]
+impl DicomRepo {
+    // WASM-specific async implementation
     pub async fn generate_ct_volume(&self, image_series_id: &str) -> Result<CTVolume, JsValue> {
-        // Retrieve the ImageSeries by ID
-        let series = self.image_series.get(image_series_id).ok_or_else(|| {
-            JsValue::from_str(&format!(
-                "ImageSeries with ID '{}' not found",
-                image_series_id
-            ))
-        })?;
-
-        // Collect all CTImages belonging to the ImageSeries
-        let mut ct_images: Vec<&CTImage> = self
-            .ct_images
-            .values()
-            .filter(|img| img.series_uid == series.uid)
-            .collect();
-
-        if ct_images.is_empty() {
-            return Err(JsValue::from_str(&format!(
-                "No CTImages found for ImageSeries with ID '{}'",
-                image_series_id
-            )));
-        }
-
-        // Sort CTImages by their z-position (third component of ImagePositionPatient)
-        ct_images.sort_by(|a, b| {
-            let z_a = a.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
-            let z_b = b.image_position_patient.map(|pos| pos.2).unwrap_or(0.0);
-            z_a.partial_cmp(&z_b).unwrap_or(Ordering::Equal)
-        });
-
-        // Validate consistency of rows, columns, and retrieve metadata from the first image
-        let rows = ct_images[0].rows;
-        let columns = ct_images[0].columns;
-        let pixel_spacing = ct_images[0]
-            .pixel_spacing
-            .ok_or_else(|| JsValue::from_str("PixelSpacing is missing in the first CTImage"))?;
-        let slice_thickness = ct_images[0].slice_thickness.unwrap_or(1.0);
-
-        // Ensure all images have consistent dimensions
-        if !ct_images
-            .iter()
-            .all(|img| img.rows == rows && img.columns == columns)
-        {
-            return Err(JsValue::from_str(&format!(
-                "Inconsistent image dimensions in ImageSeries '{}'",
-                series.uid
-            )));
-        }
-
-        let voxel_spacing = (pixel_spacing.0, pixel_spacing.1, slice_thickness);
-
-        // Pre-allocate the vector with enough capacity to hold all voxel data
-        let total_voxels = rows as usize * columns as usize * ct_images.len();
-        let mut voxel_data: Vec<i16> = Vec::with_capacity(total_voxels);
-        
-        // Collect voxel data from each CTImage sequentially
-        for img in &ct_images {
-            let data = img.get_pixel_data().map_err(|e| JsValue::from_str(&e.to_string()))?; // Manually convert the error; // Retrieve pixel data for the image
-            voxel_data.extend(data); // Append the data to the voxel_data vector
-        }
-
-        // Return the constructed CTVolume
-        Ok(CTVolume {
-            dimensions: (rows as usize, columns as usize, ct_images.len()),
-            voxel_spacing,
-            voxel_data,
-        })
+        // Call the common function and handle errors
+        self.generate_ct_volume_common(image_series_id)
+            .map_err(|e| JsValue::from_str(&e))
     }
 }
