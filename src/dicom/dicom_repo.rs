@@ -2,12 +2,12 @@ use super::ct_image::CTImage;
 use super::image_series::ImageSeries;
 use super::patient::Patient;
 use super::studyset::StudySet;
+use crate::coord::{Base, Matrix4x4};
 use crate::ct_volume::CTVolume;
 use crate::CTVolumeGenerator;
 use anyhow::{anyhow, Result};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use crate::coord::Base;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Clone)]
@@ -103,10 +103,7 @@ impl DicomRepo {
     }
 
     // Common function to generate CTVolume (shared code)
-    pub fn generate_ct_volume_common(
-        &self,
-        image_series_id: &str,
-    ) -> Result<CTVolume, String> {
+    pub fn generate_ct_volume_common(&self, image_series_id: &str) -> Result<CTVolume, String> {
         // Retrieve the ImageSeries by ID
         let series = self
             .image_series
@@ -142,21 +139,26 @@ impl DicomRepo {
             .ok_or_else(|| "PixelSpacing is missing in the first CTImage".to_string())?;
         let spacing_between_slices = ct_images[0].spacing_between_slices.unwrap_or_else(|| {
             // If spacing_between_slices is missing, calculate it from ImagePositionPatient and ImageOrientationPatient
-        if ct_images.len() > 1 {
-            let pos_a = ct_images[0].image_position_patient.unwrap_or((0.0, 0.0, 0.0));
-            let pos_b = ct_images[1].image_position_patient.unwrap_or((0.0, 0.0, 1.0));
+            if ct_images.len() > 1 {
+                let pos_a = ct_images[0]
+                    .image_position_patient
+                    .unwrap_or((0.0, 0.0, 0.0));
+                let pos_b = ct_images[1]
+                    .image_position_patient
+                    .unwrap_or((0.0, 0.0, 1.0));
 
-            // Calculate the difference in the z-components (3rd component of ImagePositionPatient)
-            let z_diff = (pos_b.2 - pos_a.2).abs();
+                // Calculate the difference in the z-components (3rd component of ImagePositionPatient)
+                let z_diff = (pos_b.2 - pos_a.2).abs();
 
-            if z_diff > 0.0 {
-                z_diff
+                if z_diff > 0.0 {
+                    z_diff
+                } else {
+                    1.0 // Fallback value if the difference is zero or invalid
+                }
             } else {
-                1.0 // Fallback value if the difference is zero or invalid
+                1.0 // Fallback value if there is only one slice (or insufficient data)
             }
-        } else {
-            1.0 // Fallback value if there is only one slice (or insufficient data)
-        }});
+        });
 
         // Ensure all images have consistent dimensions
         if !ct_images
@@ -181,12 +183,52 @@ impl DicomRepo {
             voxel_data.extend(data); // Append the data to the voxel_data vector
         }
 
+        // Extract ImageOrientationPatient and compute the Base matrix
+        let image_orientation_patient = ct_images[0]
+            .image_orientation_patient
+            .ok_or_else(|| "ImageOrientationPatient is missing in the first CTImage".to_string())?;
+
+        // Row and column direction vectors
+        let row_direction = (
+            image_orientation_patient.0,
+            image_orientation_patient.1,
+            image_orientation_patient.2,
+        );
+        let column_direction = (
+            image_orientation_patient.3,
+            image_orientation_patient.4,
+            image_orientation_patient.5,
+        );
+
+        // Slice direction (cross product of row and column directions)
+        let slice_direction = (
+            row_direction.1 * column_direction.2 - row_direction.2 * column_direction.1,
+            row_direction.2 * column_direction.0 - row_direction.0 * column_direction.2,
+            row_direction.0 * column_direction.1 - row_direction.1 * column_direction.0,
+        );
+
+        // Image position patient (origin of the base matrix)
+        let image_position_patient = ct_images[0]
+        .image_position_patient
+        .ok_or_else(|| "ImagePositionPatient is missing in the first CTImage".to_string())?;
+
+        // Construct the base matrix using row, column, and slice directions
+        let base_matrix = Matrix4x4::from_array([
+            row_direction.0, column_direction.0, slice_direction.0, image_position_patient.0,
+            row_direction.1, column_direction.1, slice_direction.1, image_position_patient.1,
+            row_direction.2, column_direction.2, slice_direction.2, image_position_patient.2,
+            0.0, 0.0, 0.0, 1.0,
+        ]);
+
         // Return the constructed CTVolume
         Ok(CTVolume {
             dimensions: (rows as usize, columns as usize, ct_images.len()),
             voxel_spacing,
             voxel_data,
-            base: Base::<f32>::default(),
+            base: Base {
+                label: series.uid.clone(),
+                matrix: base_matrix,
+            },
         })
     }
 }
