@@ -12,6 +12,9 @@ pub struct SagittalView {
 impl SagittalView {
     pub fn new(device: &wgpu::Device, texture: &Texture, idx: i32, r_speed: f32, s_speed: f32, repo: &DicomRepo) -> Self {
         let base_screen = GeometryBuilder::build_sagittal_base(&repo);
+        println!("base_screen:\n{:?}", &base_screen);
+
+
         let base_uv = GeometryBuilder::build_uv_base(&repo);
 
         let transform_matrix = base_screen.to_base(&base_uv);

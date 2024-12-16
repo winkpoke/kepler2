@@ -7,6 +7,7 @@ use crate::CTVolumeGenerator;
 use anyhow::{anyhow, Result};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use crate::coord::Base;
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Clone)]
@@ -139,7 +140,23 @@ impl DicomRepo {
         let pixel_spacing = ct_images[0]
             .pixel_spacing
             .ok_or_else(|| "PixelSpacing is missing in the first CTImage".to_string())?;
-        let slice_thickness = ct_images[0].slice_thickness.unwrap_or(1.0);
+        let spacing_between_slices = ct_images[0].spacing_between_slices.unwrap_or_else(|| {
+            // If spacing_between_slices is missing, calculate it from ImagePositionPatient and ImageOrientationPatient
+        if ct_images.len() > 1 {
+            let pos_a = ct_images[0].image_position_patient.unwrap_or((0.0, 0.0, 0.0));
+            let pos_b = ct_images[1].image_position_patient.unwrap_or((0.0, 0.0, 1.0));
+
+            // Calculate the difference in the z-components (3rd component of ImagePositionPatient)
+            let z_diff = (pos_b.2 - pos_a.2).abs();
+
+            if z_diff > 0.0 {
+                z_diff
+            } else {
+                1.0 // Fallback value if the difference is zero or invalid
+            }
+        } else {
+            1.0 // Fallback value if there is only one slice (or insufficient data)
+        }});
 
         // Ensure all images have consistent dimensions
         if !ct_images
@@ -152,7 +169,7 @@ impl DicomRepo {
             ));
         }
 
-        let voxel_spacing = (pixel_spacing.0, pixel_spacing.1, slice_thickness);
+        let voxel_spacing = (pixel_spacing.0, pixel_spacing.1, spacing_between_slices);
 
         // Pre-allocate the vector with enough capacity to hold all voxel data
         let total_voxels = rows as usize * columns as usize * ct_images.len();
@@ -169,6 +186,7 @@ impl DicomRepo {
             dimensions: (rows as usize, columns as usize, ct_images.len()),
             voxel_spacing,
             voxel_data,
+            base: Base::<f32>::default(),
         })
     }
 }

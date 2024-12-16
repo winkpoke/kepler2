@@ -15,7 +15,7 @@ pub struct CTVolume {
     pub(crate) voxel_spacing: (f32, f32, f32), // (spacing_x, spacing_y, spacing_z)
     // pub(crate) voxel_data: Vec<Vec<i16>>, // 3D voxel data flattened into slices
     pub(crate) voxel_data: Vec<i16>, // 3D voxel data 
-    // pub(crate) base: Base<f32>,
+    pub(crate) base: Base<f32>,
 }
 
 impl fmt::Debug for CTVolume {
@@ -24,10 +24,7 @@ impl fmt::Debug for CTVolume {
             .field("dimensions", &self.dimensions)
             .field("voxel_spacing", &self.voxel_spacing)
             .field("voxel_data", &format!("{} slices", self.voxel_data.len()))
-            // .field("base", &self.base.as_ref().map(|b| {
-            //     let matrix_debug = &b.matrix; // The matrix inside the base
-            //     format!("{} | Matrix: {:?}", b.label, matrix_debug)
-            // }))
+            .field("base", &format!("\n{:?}", &self.base))
             .finish()
     }
 }

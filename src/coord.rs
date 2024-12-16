@@ -221,6 +221,24 @@ where
     }
 }
 
+impl<T: fmt::Debug> fmt::Debug for Base<T> 
+where
+    T: Copy
+        + num::Zero
+        + num::One
+        + num::Signed
+        + PartialOrd
+        + std::ops::DivAssign
+        + std::ops::SubAssign,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Base")
+            .field("label", &self.label)
+            .field("matrix", &self.matrix)
+            .finish()
+    }
+}
+
 pub fn array_to_slice<T>(matrix: &[[T; 4]; 4]) -> &[T; 16] {
     // Safe to cast because we know the underlying representation is the same
     unsafe { &*(matrix as *const [[T; 4]; 4] as *const [T; 16]) }
