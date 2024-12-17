@@ -23,8 +23,7 @@ impl SagittalView {
         let transform_matrix = transform_matrix.transpose(); // row major to column major
         println!("column major: {:?}", transform_matrix);
 
-        let wgsl_path: &str = include_str!("../shader/shader_tex.wgsl");
-        let view = view::RenderContent::new(&device, &texture, wgsl_path, transform_matrix);
+        let view = view::RenderContent::new(&device, &texture, transform_matrix);
 
         Self {
             view,

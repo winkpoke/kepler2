@@ -85,7 +85,6 @@ impl RenderContent {
     pub fn new(
         device: &wgpu::Device,
         texture: &Texture,
-        wgsl_path: &'static str,
         transform_matrix: Matrix4x4<f32>
     ) -> RenderContent {
         let u_vert_data = UniformsVert {
@@ -186,11 +185,12 @@ impl RenderContent {
             &uniforms.frag,
         );
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(wgsl_path.into()), // with source
-            // source: wgpu::ShaderSource::Wgsl(wgpu::include_wgsl!(wgsl_path)), // without source, safer
-        });
+        // let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        //     label: Some("Shader"),
+        //     // source: wgpu::ShaderSource::Wgsl(include_str!(wgsl_path).into()), // with source
+        // });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("../shader/shader_tex.wgsl"));
+
 
         //wgpu::include_wgsl!(wgsl_path));
         let render_pipeline_layout =
