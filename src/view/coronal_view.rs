@@ -1,5 +1,5 @@
 use crate::geometry::GeometryBuilder;
-use crate::{view, DicomRepo};
+use crate::{view, CTVolume};
 use crate::texture_3d::Texture;
 
 pub struct CoronalView {
@@ -10,9 +10,9 @@ pub struct CoronalView {
 }
 
 impl CoronalView {
-    pub fn new(device: &wgpu::Device, texture: &Texture, idx: i32, r_speed: f32, s_speed: f32, repo: &DicomRepo) -> Self {
-        let base_screen = GeometryBuilder::build_coronal_base(&repo);
-        let base_uv = GeometryBuilder::build_uv_base(&repo);
+    pub fn new(device: &wgpu::Device, texture: &Texture, idx: i32, r_speed: f32, s_speed: f32, vol: &CTVolume) -> Self {
+        let base_screen = GeometryBuilder::build_coronal_base(&vol);
+        let base_uv = GeometryBuilder::build_uv_base(&vol);
 
         let transform_matrix = base_screen.to_base(&base_uv);
         println!("row major: {:?}", transform_matrix);

@@ -237,10 +237,16 @@ impl DicomRepo {
         ]);
 
         // Multiply the scaling, direction, and translation matrices
-        let base_matrix = scaling_matrix
-            .multiply(&direction_matrix)
-            .multiply(&translation_matrix);
+        let base_matrix = direction_matrix
+            .multiply(&translation_matrix)
+            .multiply(&scaling_matrix);
 
+        // let base_matrix = Matrix4x4::from_array([
+        //     row_direction.0, column_direction.0, slice_direction.0, image_position_patient.0,
+        //     row_direction.1, column_direction.1, slice_direction.1, image_position_patient.1,
+        //     row_direction.2, column_direction.2, slice_direction.2, image_position_patient.2,
+        //     0.0, 0.0, 0.0, 1.0,
+        // ]);
         // Return the constructed CTVolume
         Ok(CTVolume {
             dimensions: (rows as usize, columns as usize, ct_images.len()),

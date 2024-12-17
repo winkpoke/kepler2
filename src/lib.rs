@@ -172,30 +172,31 @@ impl<'a> State<'a> {
         // Stop the timer
         let elapsed_time = start_time.elapsed();
 
+        // Print the repository and performance details
+        // println!("Parsed repository: {:?}", repo);
+        println!(
+            "Parsing completed in {:.1} ms.",
+            elapsed_time.as_millis_f32()
+        );
+
+        let start_time = Instant::now();
+        let vol = repo
+            .generate_ct_volume("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561")
+            .unwrap();
+        let elapsed_time = start_time.elapsed();
+        println!(
+            "CTVolume being generated in {:.1} ms.",
+            elapsed_time.as_millis_f32()
+        );
+        // let base_screen = GeometryBuilder::build_screen_base(&repo);
+        // let base_uv = GeometryBuilder::build_uv_base(&repo);
+        // let base = base_screen.to_base(&base_uv);
+        // println!("{:?}", base);
+
+        println!("CT Volume:\n{:#?}", vol);
+
         #[cfg(not(target_arch = "wasm32"))]
         let texture = {
-            // Print the repository and performance details
-            // println!("Parsed repository: {:?}", repo);
-            println!(
-                "Parsing completed in {:.1} ms.",
-                elapsed_time.as_millis_f32()
-            );
-
-            let start_time = Instant::now();
-            let vol = repo
-                .generate_ct_volume("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561")
-                .unwrap();
-            let elapsed_time = start_time.elapsed();
-            println!(
-                "CTVolume being generated in {:.1} ms.",
-                elapsed_time.as_millis_f32()
-            );
-            // let base_screen = GeometryBuilder::build_screen_base(&repo);
-            // let base_uv = GeometryBuilder::build_uv_base(&repo);
-            // let base = base_screen.to_base(&base_uv);
-            // println!("{:?}", base);
-
-            println!("CT Volume:\n{:#?}", vol);
             let voxel_data: Vec<u16> = vol.voxel_data.iter().map(|x| (*x + 1000) as u16).collect();
             let voxel_data: &[u8] = bytemuck::cast_slice(&voxel_data);
             texture_3d::Texture::from_bytes(
@@ -218,10 +219,10 @@ impl<'a> State<'a> {
         //     transverse_view.push(view);
         // }
 
-        let transverse_view = TransverseView::new(&device, &texture, 0, 0.00, 0.005 / 2.0, &repo);
-        let sagittal_view = SagittalView::new(&device, &texture, 1, 0.00, 0.005 / 2.0, &repo);
-        let coronal_view = CoronalView::new(&device, &texture, 2, 0.00, 0.005 / 2.0, &repo);
-        let oblique_view = ObliqueView::new(&device, &texture, 3, 0.00, 0.005 / 2.0, &repo);
+        let transverse_view = TransverseView::new(&device, &texture, 0, 0.00, 0.005 / 2.0, &vol);
+        let sagittal_view = SagittalView::new(&device, &texture, 1, 0.00, 0.005 / 2.0, &vol);
+        let coronal_view = CoronalView::new(&device, &texture, 2, 0.00, 0.005 / 2.0, &vol);
+        let oblique_view = ObliqueView::new(&device, &texture, 3, 0.00, 0.005 / 2.0, &vol);
 
         Self {
             surface,

@@ -134,6 +134,21 @@ impl<
             data: transposed_data,
         }
     }
+
+    // Get the nth row of the matrix
+    pub fn get_row(&self, n: usize) -> [T; 4] {
+        self.data[n]
+    }
+
+    // Get the nth column of the matrix
+    pub fn get_column(&self, n: usize) -> [T; 4] {
+        [
+            self.data[0][n],
+            self.data[1][n],
+            self.data[2][n],
+            self.data[3][n],
+        ]
+    }
 }
 
 impl<T> Mul for Matrix4x4<T>
