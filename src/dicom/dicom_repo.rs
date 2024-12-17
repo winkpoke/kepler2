@@ -103,7 +103,7 @@ impl DicomRepo {
     }
 
     // Common function to generate CTVolume (shared code)
-    pub fn generate_ct_volume_common(&self, image_series_id: &str) -> Result<CTVolume, String> {
+    fn generate_ct_volume_common(&self, image_series_id: &str) -> Result<CTVolume, String> {
         // Retrieve the ImageSeries by ID
         let series = self
             .image_series
@@ -212,13 +212,34 @@ impl DicomRepo {
         .image_position_patient
         .ok_or_else(|| "ImagePositionPatient is missing in the first CTImage".to_string())?;
 
-        // Construct the base matrix using row, column, and slice directions
-        let base_matrix = Matrix4x4::from_array([
-            row_direction.0, column_direction.0, slice_direction.0, image_position_patient.0,
-            row_direction.1, column_direction.1, slice_direction.1, image_position_patient.1,
-            row_direction.2, column_direction.2, slice_direction.2, image_position_patient.2,
+        // Define the scaling matrix (voxel spacings)
+        let scaling_matrix = Matrix4x4::from_array([
+            voxel_spacing.0, 0.0, 0.0, 0.0,
+            0.0, voxel_spacing.1, 0.0, 0.0,
+            0.0, 0.0, voxel_spacing.2, 0.0,
             0.0, 0.0, 0.0, 1.0,
         ]);
+
+        // Define the direction matrix (row, column, slice directions)
+        let direction_matrix = Matrix4x4::from_array([
+            row_direction.0, column_direction.0, slice_direction.0, 0.0,
+            row_direction.1, column_direction.1, slice_direction.1, 0.0,
+            row_direction.2, column_direction.2, slice_direction.2, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        ]);
+
+        // Define the translation matrix (image position)
+        let translation_matrix = Matrix4x4::from_array([
+            1.0, 0.0, 0.0, image_position_patient.0,
+            0.0, 1.0, 0.0, image_position_patient.1,
+            0.0, 0.0, 1.0, image_position_patient.2,
+            0.0, 0.0, 0.0, 1.0,
+        ]);
+
+        // Multiply the scaling, direction, and translation matrices
+        let base_matrix = scaling_matrix
+            .multiply(&direction_matrix)
+            .multiply(&translation_matrix);
 
         // Return the constructed CTVolume
         Ok(CTVolume {
