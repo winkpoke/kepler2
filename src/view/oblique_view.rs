@@ -3,7 +3,7 @@ use crate::{view, CTImage, CTVolume, CTVolumeGenerator, DicomRepo};
 use crate::texture_3d::Texture;
 
 pub struct ObliqueView {
-    view: view::View,
+    view: view::RenderContent,
     r_speed: f32,
     s_speed: f32,
     idx: i32,
@@ -21,7 +21,7 @@ impl ObliqueView {
         println!("column major: {:?}", transform_matrix);
 
         let wgsl_path: &str = include_str!("../shader/shader_tex.wgsl");
-        let view = view::View::new(&device, &texture, wgsl_path, transform_matrix);
+        let view = view::RenderContent::new(&device, &texture, wgsl_path, transform_matrix);
 
         Self {
             view,

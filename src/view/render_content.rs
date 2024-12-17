@@ -68,7 +68,7 @@ const VERTICES: &[Vertex] = &[
 ];
 
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
-pub struct View {
+pub struct RenderContent {
     pub render_pipeline: wgpu::RenderPipeline,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -81,13 +81,13 @@ pub struct View {
     pub uniforms: Uniforms,
 }
 
-impl View {
+impl RenderContent {
     pub fn new(
         device: &wgpu::Device,
         texture: &Texture,
         wgsl_path: &'static str,
         transform_matrix: Matrix4x4<f32>
-    ) -> View {
+    ) -> RenderContent {
         let u_vert_data = UniformsVert {
             rotation_angle_y: 0.0,
             rotation_angle_z: 0.0,
@@ -305,9 +305,4 @@ impl View {
         }
     }
 
-}
-
-pub trait Renderable {
-    fn update(&mut self, queue: &wgpu::Queue);
-    fn render(&mut self, render_pass: &mut wgpu::RenderPass) -> Result<(), wgpu::SurfaceError>;
 }

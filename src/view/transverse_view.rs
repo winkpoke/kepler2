@@ -3,7 +3,7 @@ use crate::{view, CTVolume};
 use crate::texture_3d::Texture;
 
 pub struct TransverseView {
-    view: view::View,
+    view: view::RenderContent,
     r_speed: f32,
     s_speed: f32,
     idx: i32,
@@ -21,7 +21,7 @@ impl TransverseView {
         println!("column major: {:?}", transform_matrix);
 
         let wgsl_path: &str = include_str!("../shader/shader_tex.wgsl");
-        let view = view::View::new(&device, &texture, wgsl_path, transform_matrix);
+        let view = view::RenderContent::new(&device, &texture, wgsl_path, transform_matrix);
 
         Self {
             view,
@@ -57,9 +57,9 @@ impl view::Renderable for TransverseView {
 
     fn render(&mut self, render_pass: &mut wgpu::RenderPass) -> Result<(), wgpu::SurfaceError> {
         render_pass.set_pipeline(&self.view.render_pipeline); // 2.
-        let width = 400;
-        let x: f32 = (self.idx % (800 / width))  as f32 * width as f32;
-        let y: f32 = (self.idx / (800 / width)) as f32 * width as f32;
+        let width = 800;
+        let x: f32 = 0.0; //(self.idx % (800 / width))  as f32 * width as f32;
+        let y: f32 = 0.0;//(self.idx / (800 / width)) as f32 * width as f32;
         render_pass.set_viewport(x, y, width as f32, width as f32, 0.0, 1.0);
         render_pass.set_bind_group(0, &self.view.texture_bind_group, &[]);
         render_pass.set_bind_group(1, &self.view.uniform_vert_bind_group, &[]);
