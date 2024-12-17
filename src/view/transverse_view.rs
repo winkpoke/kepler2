@@ -57,7 +57,7 @@ impl view::Renderable for TransverseView {
 
     fn render(&mut self, render_pass: &mut wgpu::RenderPass) -> Result<(), wgpu::SurfaceError> {
         render_pass.set_pipeline(&self.view.render_pipeline); // 2.
-        let width = 800;
+        let width = 800 / 2;
         let x: f32 = 0.0; //(self.idx % (800 / width))  as f32 * width as f32;
         let y: f32 = 0.0;//(self.idx / (800 / width)) as f32 * width as f32;
         render_pass.set_viewport(x, y, width as f32, width as f32, 0.0, 1.0);

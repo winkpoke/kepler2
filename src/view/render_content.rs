@@ -143,12 +143,6 @@ impl RenderContent {
             label: Some("diffuse_bind_group"),
         });
 
-        let uniform_vert_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[uniforms.vert]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
         // Create a bind group for the uniform buffer
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -165,26 +159,12 @@ impl RenderContent {
                 label: Some("uniform_bind_group_layout"),
             });
 
-        let uniform_vert_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &uniform_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &uniform_vert_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            }],
-            label: Some("uniform_bind_group"),
-        });
-
-        // Create a bind group for the uniform buffer in fragment shader
-        let uniform_frag_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer in Fragment Shader"),
-            contents: bytemuck::cast_slice(&[uniforms.frag]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
+        let (uniform_vert_buffer, uniform_vert_bind_group) = create_uniform_bind_group(
+            device,
+            &uniform_bind_group_layout,
+            &uniforms.vert,
+        );
+        
         let uniform_frag_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
@@ -200,18 +180,11 @@ impl RenderContent {
                 label: Some("uniform_frag_bind_group_layout"),
             });
 
-        let uniform_frag_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &uniform_frag_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &uniform_frag_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            }],
-            label: Some("uniform_frag_bind_group"),
-        });
+        let (uniform_frag_buffer, uniform_frag_bind_group) = create_uniform_bind_group(
+            device,
+            &uniform_frag_bind_group_layout,
+            &uniforms.frag,
+        );
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -304,5 +277,31 @@ impl RenderContent {
             uniforms,
         }
     }
+}
 
+fn create_uniform_bind_group<T: bytemuck::Pod>(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    data: &T,
+) -> (wgpu::Buffer, wgpu::BindGroup) {
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Uniform Buffer"),
+        contents: bytemuck::cast_slice(&[*data]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: &buffer,
+                offset: 0,
+                size: None,
+            }),
+        }],
+        label: Some("Uniform Bind Group"),
+    });
+
+    (buffer, bind_group)
 }
