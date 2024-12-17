@@ -1,9 +1,7 @@
 #![feature(duration_millis_float)]
 
-use geometry::GeometryBuilder;
 use log::{debug, error, info, warn};
-use wgpu::Label;
-use std::{iter, sync::Arc};
+
 // use wgpu::util::DeviceExt;
 use winit::{
     dpi::PhysicalSize,
@@ -31,6 +29,10 @@ use ct_volume::*;
 use dicom::*;
 
 use std::time::Instant;
+
+// Include the generated files from the build script
+#[cfg(target_arch = "wasm32")]
+include!("../static/dicom_files.rs");
 
 fn list_files_in_directory(dir: &str) -> io::Result<Vec<PathBuf>> {
     let mut file_paths = Vec::new();
@@ -152,50 +154,58 @@ impl<'a> State<'a> {
         //     include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
         // include_bytes!("../image/CT.png");
         // println!("len = {}", diffuse_bytes.len());
-        #[cfg(target_arch = "wasm32")]
-        let texture =
-            // texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
-            texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 10).unwrap();
+        // #[cfg(target_arch = "wasm32")]
+        // let texture =
+        //     // texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
+        //     texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 10).unwrap();
         
-        // Start the timer
-        let start_time = Instant::now();
-
-        let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
-        let repo = dicom::fileio::parse_dcm_directories(vec![
-            "C:\\share\\imrt",
-            "C:\\share\\head_mold",
-        ])
-        .await
-        .unwrap();
-        println!("DicomRepo:\n{}", repo.to_string());
-        println!("Patients:\n{:?}", repo.get_all_patients());
-        // Stop the timer
-        let elapsed_time = start_time.elapsed();
-
-        // Print the repository and performance details
-        // println!("Parsed repository: {:?}", repo);
-        println!(
-            "Parsing completed in {:.1} ms.",
-            elapsed_time.as_millis_f32()
-        );
-
-        let start_time = Instant::now();
-        let vol = repo
-            .generate_ct_volume("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561")
-            .unwrap();
-        let elapsed_time = start_time.elapsed();
-        println!(
-            "CTVolume being generated in {:.1} ms.",
-            elapsed_time.as_millis_f32()
-        );
-        // let base_screen = GeometryBuilder::build_screen_base(&repo);
-        // let base_uv = GeometryBuilder::build_uv_base(&repo);
-        // let base = base_screen.to_base(&base_uv);
-        // println!("{:?}", base);
-
-        println!("CT Volume:\n{:#?}", vol);
-
         #[cfg(not(target_arch = "wasm32"))]
+        let repo = {
+            // Start the timer
+            let start_time = Instant::now();
+
+            let file_names = list_files_in_directory("C:\\share\\imrt").unwrap();
+            let repo = dicom::fileio::parse_dcm_directories(vec![
+                "C:\\share\\imrt",
+                "C:\\share\\head_mold",
+            ])
+            .await
+            .unwrap();
+            println!("DicomRepo:\n{}", repo.to_string());
+            println!("Patients:\n{:?}", repo.get_all_patients());
+            // Stop the timer
+            let elapsed_time = start_time.elapsed();
+
+            // Print the repository and performance details
+            // println!("Parsed repository: {:?}", repo);
+            println!(
+                "Parsing completed in {:.1} ms.",
+                elapsed_time.as_millis_f32()
+            );
+            repo
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        let repo = {
+            let files = dicom::fileio::create_files_from_arrays(FILES);
+            let repo = dicom::fileio::parse_dcm_files_wasm(files).await.unwrap();
+            repo
+        };
+
+        let vol = {
+            let start_time = Instant::now();
+            let vol = repo
+                .generate_ct_volume("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561")
+                .unwrap();
+            let elapsed_time = start_time.elapsed();
+            println!(
+                "CTVolume being generated in {:.1} ms.",
+                elapsed_time.as_millis_f32()
+            );
+            println!("CT Volume:\n{:#?}", vol);
+            vol
+        };
+
         let texture = {
             let voxel_data: Vec<u16> = vol.voxel_data.iter().map(|x| (*x + 1000) as u16).collect();
             let voxel_data: &[u8] = bytemuck::cast_slice(&voxel_data);

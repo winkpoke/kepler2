@@ -8,7 +8,7 @@ pub struct GeometryBuilder<'a> {
     sorted_image_series: Option<Vec<&'a CTImage>>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+// #[cfg(not(target_arch = "wasm32"))]
 impl <'a> GeometryBuilder<'a> {
     pub fn new() -> Self {
         Self {

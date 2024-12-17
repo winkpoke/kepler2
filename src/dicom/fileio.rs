@@ -157,6 +157,8 @@ pub async fn parse_dcm_files(file_paths: Vec<std::path::PathBuf>) -> Result<Dico
 #[cfg(target_arch = "wasm32")]
 use js_sys::{Array, Promise, Uint8Array};
 #[cfg(target_arch = "wasm32")]
+use web_sys::{File, FileReader, ProgressEvent, console};
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 
@@ -167,7 +169,6 @@ pub async fn parse_dcm_files_wasm(files: Array) -> Result<DicomRepo, JsValue> {
     // use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     // use wasm_bindgen_futures::future_to_promise;
-    use web_sys::{File, FileReader, ProgressEvent, console};
     use log::error;
 
     // Shared repository and counter
@@ -237,3 +238,4 @@ pub async fn parse_dcm_files_wasm(files: Array) -> Result<DicomRepo, JsValue> {
     let repo = repo.lock().map_err(|e| JsValue::from(e.to_string()))?;
     Ok(repo.clone())
 }
+

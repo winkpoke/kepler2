@@ -374,7 +374,7 @@ impl DicomRepo {
 #[cfg(target_arch = "wasm32")]
 impl DicomRepo {
     // WASM-specific async implementation
-    pub async fn generate_ct_volume(&self, image_series_id: &str) -> Result<CTVolume, JsValue> {
+    pub fn generate_ct_volume(&self, image_series_id: &str) -> Result<CTVolume, JsValue> {
         // Call the common function and handle errors
         self.generate_ct_volume_common(image_series_id)
             .map_err(|e| JsValue::from_str(&e))
