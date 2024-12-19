@@ -7,6 +7,9 @@ pub struct TransverseView {
     r_speed: f32,
     s_speed: f32,
     idx: i32,
+
+    pos: (i32, i32),
+    dim: (u32, u32),
 }
 
 impl TransverseView {

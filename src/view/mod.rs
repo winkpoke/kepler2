@@ -1,3 +1,5 @@
+mod view;
+pub use view::*;
 
 mod render_context;
 pub use render_context::*;
