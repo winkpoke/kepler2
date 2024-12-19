@@ -1,7 +1,7 @@
-use wgpu::util::DeviceExt;
 use crate::coord::{array_to_slice, Matrix4x4};
-use crate::texture_3d::Texture;
 use crate::geometry::GeometryBuilder;
+use crate::render_content::RenderContent;
+use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -68,7 +68,7 @@ const VERTICES: &[Vertex] = &[
 ];
 
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
-pub struct RenderContent {
+pub struct RenderContext {
     pub render_pipeline: wgpu::RenderPipeline,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -81,17 +81,17 @@ pub struct RenderContent {
     pub uniforms: Uniforms,
 }
 
-impl RenderContent {
+impl RenderContext {
     pub fn new(
         device: &wgpu::Device,
-        texture: &Texture,
-        transform_matrix: Matrix4x4<f32>
-    ) -> RenderContent {
+        texture: &RenderContent,
+        transform_matrix: Matrix4x4<f32>,
+    ) -> RenderContext {
         let u_vert_data = UniformsVert {
             rotation_angle_y: 0.0,
             rotation_angle_z: 0.0,
             ..Default::default()
-        };       
+        };
         let u_frag_data = UniformsFrag {
             window: 350.,
             level: 1140.,
@@ -142,74 +142,32 @@ impl RenderContent {
             label: Some("diffuse_bind_group"),
         });
 
-        // Create a bind group for the uniform buffer
-        let uniform_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("uniform_bind_group_layout"),
-            });
+        let (uniform_vert_buffer, uniform_vert_bind_group, vert_bind_group_layout) =
+            create_vertext_uniform_bind_group(device, &uniforms.vert);
 
-        let (uniform_vert_buffer, uniform_vert_bind_group) = create_uniform_bind_group(
-            device,
-            &uniform_bind_group_layout,
-            &uniforms.vert,
-        );
-        
-        let uniform_frag_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("uniform_frag_bind_group_layout"),
-            });
+        let (uniform_frag_buffer, uniform_frag_bind_group, frag_bind_group_layout) =
+            create_fragment_uniform_bind_group(device, &uniforms.frag);
 
-        let (uniform_frag_buffer, uniform_frag_bind_group) = create_uniform_bind_group(
-            device,
-            &uniform_frag_bind_group_layout,
-            &uniforms.frag,
-        );
-
-        // let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        //     label: Some("Shader"),
-        //     // source: wgpu::ShaderSource::Wgsl(include_str!(wgsl_path).into()), // with source
-        // });
         let shader = device.create_shader_module(wgpu::include_wgsl!("../shader/shader_tex.wgsl"));
 
-
-        //wgpu::include_wgsl!(wgsl_path));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
-                    &uniform_bind_group_layout,
-                    &uniform_frag_bind_group_layout,
+                    &vert_bind_group_layout,
+                    &frag_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some("vs_main"),     // 1.
-                buffers: &[Vertex::desc()], // 2.
+                entry_point: Some("vs_main"), // 1.
+                buffers: &[Vertex::desc()],   // 2.
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -304,4 +262,48 @@ fn create_uniform_bind_group<T: bytemuck::Pod>(
     });
 
     (buffer, bind_group)
+}
+
+fn create_vertext_uniform_bind_group<T: bytemuck::Pod>(
+    device: &wgpu::Device,
+    data: &T,
+) -> (wgpu::Buffer, wgpu::BindGroup, wgpu::BindGroupLayout) {
+    // Create a bind group for the uniform buffer
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+        label: Some("uniform_bind_group_layout"),
+    });
+
+    let (buffer, bind_group) = create_uniform_bind_group(device, &layout, data);
+    (buffer, bind_group, layout)
+}
+
+fn create_fragment_uniform_bind_group<T: bytemuck::Pod>(
+    device: &wgpu::Device,
+    data: &T,
+) -> (wgpu::Buffer, wgpu::BindGroup, wgpu::BindGroupLayout) {
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+        label: Some("uniform_frag_bind_group_layout"),
+    });
+    let (buffer, bind_group) = create_uniform_bind_group(device, &layout, data);
+    (buffer, bind_group, layout)
 }

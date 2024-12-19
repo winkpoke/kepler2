@@ -18,7 +18,7 @@ pub mod coord;
 pub mod ct_volume;
 pub mod dicom;
 pub mod geometry;
-mod texture_3d;
+mod render_content;
 mod view;
 
 use std::fs;
@@ -64,7 +64,7 @@ struct State<'a> {
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
     window: &'a Window,
-    texture: texture_3d::Texture,
+    texture: render_content::RenderContent,
     transverse_view: TransverseView,
     sagittal_view: SagittalView,
     coronal_view: CoronalView,
@@ -209,7 +209,7 @@ impl<'a> State<'a> {
         let texture = {
             let voxel_data: Vec<u16> = vol.voxel_data.iter().map(|x| (*x + 1000) as u16).collect();
             let voxel_data: &[u8] = bytemuck::cast_slice(&voxel_data);
-            texture_3d::Texture::from_bytes(
+            render_content::RenderContent::from_bytes(
                 &device,
                 &queue,
                 voxel_data,

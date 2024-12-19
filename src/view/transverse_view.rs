@@ -1,16 +1,16 @@
 use crate::geometry::GeometryBuilder;
 use crate::{view, CTVolume};
-use crate::texture_3d::Texture;
+use crate::render_content::RenderContent;
 
 pub struct TransverseView {
-    view: view::RenderContent,
+    view: view::RenderContext,
     r_speed: f32,
     s_speed: f32,
     idx: i32,
 }
 
 impl TransverseView {
-    pub fn new(device: &wgpu::Device, texture: &Texture, idx: i32, r_speed: f32, s_speed: f32, vol: &CTVolume) -> Self {
+    pub fn new(device: &wgpu::Device, texture: &RenderContent, idx: i32, r_speed: f32, s_speed: f32, vol: &CTVolume) -> Self {
         let base_screen = GeometryBuilder::build_transverse_base(&vol);
         let base_uv = GeometryBuilder::build_uv_base(&vol);
 
@@ -20,7 +20,7 @@ impl TransverseView {
         let transform_matrix = transform_matrix.transpose(); // row major to column major
         println!("column major: {:?}", transform_matrix);
 
-        let view = view::RenderContent::new(&device, &texture, transform_matrix);
+        let view = view::RenderContext::new(&device, &texture, transform_matrix);
 
         Self {
             view,

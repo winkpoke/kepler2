@@ -2,14 +2,14 @@ use anyhow::*;
 use log::{debug, error, info};
 use wgpu::util::DeviceExt;
 
-pub struct Texture {
+pub struct RenderContent {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
     pub texture_format: wgpu::TextureFormat,
 }
 
-impl Texture {
+impl RenderContent {
     // Read a 3D texture from bytes
     pub fn from_bytes(
         device: &wgpu::Device,
