@@ -11,7 +11,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use view::{CoronalView, ObliqueView, Renderable, SagittalView, TransverseView};
+use view::{CoronalView, Layout, ObliqueView, Renderable, SagittalView, TransverseView};
 
 // mod texture;
 pub mod coord;
@@ -65,10 +65,11 @@ struct State<'a> {
     // unsafe references to the window's resources.
     window: &'a Window,
     texture: render_content::RenderContent,
-    transverse_view: TransverseView,
-    sagittal_view: SagittalView,
-    coronal_view: CoronalView,
-    oblique_view: ObliqueView,
+    // transverse_view: TransverseView,
+    // sagittal_view: SagittalView,
+    // coronal_view: CoronalView,
+    // oblique_view: ObliqueView,
+    layout: Layout,
 }
 
 impl<'a> State<'a> {
@@ -224,10 +225,17 @@ impl<'a> State<'a> {
         println!("supported texture formats: {:?}", surface_caps.formats);
         println!("format: {:?}", config.format);
 
-        let transverse_view = TransverseView::new(&device, &texture, 0, 0.00, 0.005 / 2.0, &vol, (0, 0), (900, 900));
-        let sagittal_view = SagittalView::new(&device, &texture, 1, 0.00, 0.005 / 2.0, &vol, (900, 0), (300, 300));
-        let coronal_view = CoronalView::new(&device, &texture, 2, 0.00, 0.005 / 2.0, &vol, (900, 300), (300, 300));
-        let oblique_view = ObliqueView::new(&device, &texture, 3, 0.00, 0.005 / 2.0, &vol, (900, 600), (300, 300));
+        let transverse_view = TransverseView::new(&device, &texture, 0.00, 0.005 / 2.0, &vol, (0, 0), (900, 900));
+        let sagittal_view = SagittalView::new(&device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 0), (300, 300));
+        let coronal_view = CoronalView::new(&device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 300), (300, 300));
+        let oblique_view = ObliqueView::new(&device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 600), (300, 300));
+
+        let mut layout = Layout::new((800, 800));
+        layout.add_view(Box::new(transverse_view));
+        layout.add_view(Box::new(sagittal_view));
+        layout.add_view(Box::new(coronal_view));
+        layout.add_view(Box::new(oblique_view));
+
 
         Self {
             surface,
@@ -237,10 +245,11 @@ impl<'a> State<'a> {
             size,
             window,
             texture,
-            transverse_view,
-            sagittal_view,
-            coronal_view,
-            oblique_view,
+            // transverse_view,
+            // sagittal_view,
+            // coronal_view,
+            // oblique_view,
+            layout,
         }
     }
 
@@ -266,10 +275,11 @@ impl<'a> State<'a> {
         // for i in 0..self.transverse_view.len() {
         //     self.transverse_view[i].update(&self.queue);
         // }
-        self.transverse_view.update(&self.queue);
-        self.sagittal_view.update(&self.queue);
-        self.coronal_view.update(&self.queue);
-        self.oblique_view.update(&self.queue);
+        // self.transverse_view.update(&self.queue);
+        // self.sagittal_view.update(&self.queue);
+        // self.coronal_view.update(&self.queue);
+        // self.oblique_view.update(&self.queue);
+        self.layout.update(&self.queue);
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -306,10 +316,12 @@ impl<'a> State<'a> {
             // for i in 0..self.transverse_view.len() {
             //     self.transverse_view[i].render(&mut render_pass)?;
             // }
-            self.transverse_view.render(&mut render_pass)?;
-            self.sagittal_view.render(&mut render_pass)?;
-            self.coronal_view.render(&mut render_pass)?;
-            self.oblique_view.render(&mut render_pass)?;
+            // self.transverse_view.render(&mut render_pass)?;
+            // self.sagittal_view.render(&mut render_pass)?;
+            // self.coronal_view.render(&mut render_pass)?;
+            // self.oblique_view.render(&mut render_pass)?;
+
+            self.layout.render(&mut render_pass)?;
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();

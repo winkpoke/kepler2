@@ -1,19 +1,18 @@
 use crate::geometry::GeometryBuilder;
-use crate::{view, CTImage, CTVolume, CTVolumeGenerator, DicomRepo};
+use crate::{view, CTVolume};
 use crate::render_content::RenderContent;
 
 pub struct ObliqueView {
     view: view::RenderContext,
     r_speed: f32,
     s_speed: f32,
-    idx: i32,
     
     pos: (i32, i32),
     dim: (u32, u32),
 }
 
 impl ObliqueView {
-    pub fn new(device: &wgpu::Device, texture: &RenderContent, idx: i32, r_speed: f32, s_speed: f32, vol: &CTVolume, pos: (i32, i32), dim: (u32, u32),) -> Self {
+    pub fn new(device: &wgpu::Device, texture: &RenderContent, r_speed: f32, s_speed: f32, vol: &CTVolume, pos: (i32, i32), dim: (u32, u32),) -> Self {
         let base_screen = GeometryBuilder::build_oblique_base(&vol);
         let base_uv = GeometryBuilder::build_uv_base(&vol);
 
@@ -29,7 +28,6 @@ impl ObliqueView {
             view,
             r_speed,
             s_speed,
-            idx,
             pos,
             dim
         }
@@ -67,7 +65,7 @@ impl view::Renderable for ObliqueView {
         let width = self.dim.0;
         let height = self.dim.1;
 
-        render_pass.set_viewport(x, y, width as f32, width as f32, 0.0, 1.0);
+        render_pass.set_viewport(x, y, width as f32, height as f32, 0.0, 1.0);
         render_pass.set_bind_group(0, &self.view.texture_bind_group, &[]);
         render_pass.set_bind_group(1, &self.view.uniform_vert_bind_group, &[]);
         render_pass.set_bind_group(2, &self.view.uniform_frag_bind_group, &[]);
@@ -75,5 +73,24 @@ impl view::Renderable for ObliqueView {
         render_pass.set_index_buffer(self.view.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..self.view.num_indices, 0, 0..1);
         Ok(())
+    }
+}
+
+
+impl view::View for ObliqueView {
+    fn position(&self) -> (i32, i32) {
+        self.pos
+    }
+
+    fn dimensions(&self) -> (u32, u32) {
+        self.dim
+    }
+
+    fn move_to(&mut self, pos: (i32, i32)) {
+        self.pos = pos;
+    }
+
+    fn resize(&mut self, dim: (u32, u32)) {
+        self.dim = dim;
     }
 }

@@ -6,14 +6,13 @@ pub struct TransverseView {
     view: view::RenderContext,
     r_speed: f32,
     s_speed: f32,
-    idx: i32,
 
     pos: (i32, i32),
     dim: (u32, u32),
 }
 
 impl TransverseView {
-    pub fn new(device: &wgpu::Device, texture: &RenderContent, idx: i32, r_speed: f32, s_speed: f32, vol: &CTVolume, pos: (i32, i32), dim: (u32, u32)) -> Self {
+    pub fn new(device: &wgpu::Device, texture: &RenderContent, r_speed: f32, s_speed: f32, vol: &CTVolume, pos: (i32, i32), dim: (u32, u32)) -> Self {
         let base_screen = GeometryBuilder::build_transverse_base(&vol);
         let base_uv = GeometryBuilder::build_uv_base(&vol);
 
@@ -29,7 +28,6 @@ impl TransverseView {
             view,
             r_speed,
             s_speed,
-            idx,
             pos,
             dim
         }
@@ -75,5 +73,23 @@ impl view::Renderable for TransverseView {
         render_pass.set_index_buffer(self.view.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..self.view.num_indices, 0, 0..1);
         Ok(())
+    }
+}
+
+impl view::View for TransverseView {
+    fn position(&self) -> (i32, i32) {
+        self.pos
+    }
+
+    fn dimensions(&self) -> (u32, u32) {
+        self.dim
+    }
+
+    fn move_to(&mut self, pos: (i32, i32)) {
+        self.pos = pos;
+    }
+
+    fn resize(&mut self, dim: (u32, u32)) {
+        self.dim = dim;
     }
 }
