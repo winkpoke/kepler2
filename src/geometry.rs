@@ -1,4 +1,4 @@
-use crate::{coord::{Base, Matrix4x4}, dicom::DicomRepo, CTImage, CTVolume, CTVolumeGenerator};
+use crate::{coord::{Base, Matrix4x4}, dicom::DicomRepo, CTImage, CTVolume};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;

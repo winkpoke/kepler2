@@ -4,8 +4,8 @@ pub use view::*;
 mod render_context;
 pub use render_context::*;
 
-mod rendaerable;
-pub use rendaerable::*;
+mod renderable;
+pub use renderable::*;
 
 mod transverse_view;
 pub use transverse_view::*;

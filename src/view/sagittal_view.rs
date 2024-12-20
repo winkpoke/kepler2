@@ -7,10 +7,13 @@ pub struct SagittalView {
     r_speed: f32,
     s_speed: f32,
     idx: i32,
+
+    pos: (i32, i32),
+    dim: (u32, u32),
 }
 
 impl SagittalView {
-    pub fn new(device: &wgpu::Device, texture: &RenderContent, idx: i32, r_speed: f32, s_speed: f32, vol: &CTVolume) -> Self {
+    pub fn new(device: &wgpu::Device, texture: &RenderContent, idx: i32, r_speed: f32, s_speed: f32, vol: &CTVolume, pos: (i32, i32), dim: (u32, u32),) -> Self {
         let base_screen = GeometryBuilder::build_sagittal_base(&vol);
         println!("base_screen:\n{:?}", &base_screen);
 
@@ -30,6 +33,8 @@ impl SagittalView {
             r_speed,
             s_speed,
             idx,
+            pos,
+            dim,
         }
     }
 }
@@ -59,10 +64,13 @@ impl view::Renderable for SagittalView {
 
     fn render(&mut self, render_pass: &mut wgpu::RenderPass) -> Result<(), wgpu::SurfaceError> {
         render_pass.set_pipeline(&self.view.render_pipeline); // 2.
-        let width = 400;
-        let x: f32 = (self.idx % (800 / width))  as f32 * width as f32;
-        let y: f32 = (self.idx / (800 / width)) as f32 * width as f32;
-        render_pass.set_viewport(x, y, width as f32, width as f32, 0.0, 1.0);
+        
+        let x: f32 = self.pos.0 as f32;
+        let y: f32 = self.pos.1 as f32;
+        let width = self.dim.0;
+        let height = self.dim.1;
+
+        render_pass.set_viewport(x, y, width as f32, height as f32, 0.0, 1.0);
         render_pass.set_bind_group(0, &self.view.texture_bind_group, &[]);
         render_pass.set_bind_group(1, &self.view.uniform_vert_bind_group, &[]);
         render_pass.set_bind_group(2, &self.view.uniform_frag_bind_group, &[]);

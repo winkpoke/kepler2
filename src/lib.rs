@@ -223,16 +223,11 @@ impl<'a> State<'a> {
 
         println!("supported texture formats: {:?}", surface_caps.formats);
         println!("format: {:?}", config.format);
-        // let mut transverse_view = Vec::<TransverseView>::new();
-        // for i in 0..4 {
-        //     let view = TransverseView::new(&device, &texture, i, 0.00, 0.005 * (i as f32) / 2.0, &repo);
-        //     transverse_view.push(view);
-        // }
 
-        let transverse_view = TransverseView::new(&device, &texture, 0, 0.00, 0.005 / 2.0, &vol);
-        let sagittal_view = SagittalView::new(&device, &texture, 1, 0.00, 0.005 / 2.0, &vol);
-        let coronal_view = CoronalView::new(&device, &texture, 2, 0.00, 0.005 / 2.0, &vol);
-        let oblique_view = ObliqueView::new(&device, &texture, 3, 0.00, 0.005 / 2.0, &vol);
+        let transverse_view = TransverseView::new(&device, &texture, 0, 0.00, 0.005 / 2.0, &vol, (0, 0), (900, 900));
+        let sagittal_view = SagittalView::new(&device, &texture, 1, 0.00, 0.005 / 2.0, &vol, (900, 0), (300, 300));
+        let coronal_view = CoronalView::new(&device, &texture, 2, 0.00, 0.005 / 2.0, &vol, (900, 300), (300, 300));
+        let oblique_view = ObliqueView::new(&device, &texture, 3, 0.00, 0.005 / 2.0, &vol, (900, 600), (300, 300));
 
         Self {
             surface,
@@ -365,11 +360,11 @@ pub async fn run() {
             })
             .expect("Couldn't append canvas to document body.");
 
-        let _ = window.request_inner_size(PhysicalSize::new(800, 800));
+        let _ = window.request_inner_size(PhysicalSize::new(1200, 900));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    let _ = window.request_inner_size(PhysicalSize::new(800, 800));
+    let _ = window.request_inner_size(PhysicalSize::new(1200, 900));
 
     // State::new uses async code, so we're going to wait for it to finish
     let mut state = State::new(&window).await;
