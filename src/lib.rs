@@ -30,9 +30,6 @@ use dicom::*;
 
 use std::time::Instant;
 
-// Include the generated files from the build script
-#[cfg(target_arch = "wasm32")]
-include!("../static/dicom_files.rs");
 
 fn list_files_in_directory(dir: &str) -> io::Result<Vec<PathBuf>> {
     let mut file_paths = Vec::new();
@@ -186,12 +183,12 @@ impl<'a> State<'a> {
             repo
         };
 
-        #[cfg(target_arch = "wasm32")]
-        let repo = {
-            let files = dicom::fileio::create_files_from_arrays(FILES);
-            let repo = dicom::fileio::parse_dcm_files_wasm(files).await.unwrap();
-            repo
-        };
+        // #[cfg(target_arch = "wasm32")]
+        // let repo = {
+        //     let files = dicom::fileio::create_files_from_arrays(FILES);
+        //     let repo = dicom::fileio::parse_dcm_files_wasm(files).await.unwrap();
+        //     repo
+        // };
 
         let vol = {
             let start_time = Instant::now();

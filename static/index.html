@@ -10,19 +10,125 @@
         canvas {
             background-color: black;
         }
+
+        ul li {
+            list-style: none;
+        }
     </style>
 </head>
 
 <body>
     <div id="wasm-example"></div>
+    <input type="file" id="file" multiple>
+    <div id="tree-container"></div>
     <script type="module">
-        import init from "../pkg/kepler_wgpu.js";
-        let kepler2 = await init();
-        kepler2.run();
-        //   init().then(() => {
-        //       run();
-        //       console.log("WASM Loaded");
-        //   });
+        import init from '../pkg/kepler_wgpu.js';
+        let wasm = await init();
+        let series_id;
+        let fileLists = [];
+
+        document.querySelector('#file').addEventListener('change', async () => {
+            const files = document.querySelector('input[type="file"]').files;
+            fileLists = files;
+
+            const fileArray = Array.from(files);
+            let patient_list = await get_tree(fileArray);
+            let ul = createTree(patient_list);
+            const treeContainer = document.getElementById('tree-container');
+            treeContainer.appendChild(createTree(patient_list));
+
+        })
+
+        function get_tree(fileArray) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    let repo = await wasm.parse_dcm_files_wasm(fileArray);
+                    // 获取所有患者信息
+                    let patients = JSON.parse(repo.get_all_patients());
+                    let patient_list = [];
+                    for (const patient of patients) {
+                        let patient_data = {
+                            label: patient.name,
+                            children: []
+                        };
+                        // 获取患者的研究（study）
+                        let studies = JSON.parse(repo.get_studies_by_patient(patient.patient_id));
+                       
+                        for (const study of studies) {
+                            let study_data = {
+                                label: study.uid,
+                                children: []
+                            };
+                            // 获取研究的序列（series）
+                            let series = JSON.parse(repo.get_series_by_study(study.uid));
+                            for (const serie of series) {
+                                let serie_data = {
+                                    label: serie.uid,
+                                    images: []
+                                };
+                                // 获取序列的图像（images）
+                                let images_id = JSON.parse(repo.get_images_by_series(serie.uid));
+                                serie_data.images = images_id; // 添加图像数据
+                                study_data.children.push(serie_data); // 添加序列数据
+                            }
+                            patient_data.children.push(study_data); // 添加研究数据
+                        }
+                        patient_list.push(patient_data); // 添加患者数据
+                    }
+                    resolve(patient_list)
+                    // console.log(patient_list); // 格式化输出 JSON 数据
+                } catch (error) {
+                    reject(error);
+                    console.error("Error parsing DICOM files:", error);
+                }
+            })
+
+        }
+
+        function createTree(data, isRoot = true) {
+            const ul = document.createElement('ul');
+            data.forEach(item => {
+                const li = document.createElement('li');
+                const toggle = document.createElement('span');
+                toggle.textContent = item.label;
+                toggle.classList.add('toggle');
+
+                const expandIcon = document.createElement('span');
+                if (item.children) {
+                    expandIcon.classList.add('expand-icon');
+                    expandIcon.innerHTML = '▶'; // 默认使用右箭头
+                    li.appendChild(expandIcon);
+                }
+                li.appendChild(toggle);
+                isRoot && li.classList.add('series'); // 给最外层 li 添加 class
+                // 如果有子节点，则递归创建树
+                if (item.children) {
+                    const childUl = createTree(item.children, false);
+                    childUl.style.display = 'none'; // 初始隐藏子节点
+                    li.appendChild(childUl);
+                    // 添加点击事件来切换显示
+                    toggle.addEventListener('click', () => {
+                        const isHidden = childUl.style.display === 'none';
+                        childUl.style.display = isHidden ? 'block' : 'none';
+                        expandIcon.innerHTML = isHidden ? '▼' : '▶'; // 更新图标
+                        if (isHidden) {
+                            expandIcon.classList.remove('collapsed');
+                        } else {
+                            expandIcon.classList.add('collapsed');
+                        }
+                    });
+                }else {
+                    toggle.addEventListener('click', () => {
+                        series_id = toggle.innerHTML;
+                        console.log(series_id);
+                    })
+                }
+
+                ul.appendChild(li);
+            });
+            return ul;
+        }
+
     </script>
 </body>
 
