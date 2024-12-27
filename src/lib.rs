@@ -61,11 +61,6 @@ struct State<'a> {
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
     window: &'a Window,
-    texture: render_content::RenderContent,
-    // transverse_view: TransverseView,
-    // sagittal_view: SagittalView,
-    // coronal_view: CoronalView,
-    // oblique_view: ObliqueView,
     layout: Layout,
 }
 
@@ -147,17 +142,32 @@ impl<'a> State<'a> {
         if size.width > 0 && size.height > 0 {
             surface.configure(&device, &config);
         }
+        println!("supported texture formats: {:?}", surface_caps.formats);
+        println!("format: {:?}", config.format);
 
-        // let diffuse_bytes =
-        //     include_bytes!("../image/Free-Crochet-Baby-Tiger-Amigurumi-Pattern.png");
-        // include_bytes!("../image/CT.png");
-        // println!("len = {}", diffuse_bytes.len());
         // #[cfg(target_arch = "wasm32")]
-        // let texture =
-        //     // texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "Baby Tiger").unwrap();
-        //     texture_3d::Texture::from_file_at_compile_time(&device, &queue, "CT", 512, 512, 10).unwrap();
+        // let repo = {
+        //     let files = dicom::fileio::create_files_from_arrays(FILES);
+        //     let repo = dicom::fileio::parse_dcm_files_wasm(files).await.unwrap();
+        //     repo
+        // };
+
         
-        #[cfg(not(target_arch = "wasm32"))]
+        let layout = Layout::new((800, 800));
+
+        Self {
+            surface,
+            device,
+            queue,
+            config,
+            size,
+            window,
+            layout,
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn load_data(&mut self) {
         let repo = {
             // Start the timer
             let start_time = Instant::now();
@@ -183,13 +193,6 @@ impl<'a> State<'a> {
             repo
         };
 
-        // #[cfg(target_arch = "wasm32")]
-        // let repo = {
-        //     let files = dicom::fileio::create_files_from_arrays(FILES);
-        //     let repo = dicom::fileio::parse_dcm_files_wasm(files).await.unwrap();
-        //     repo
-        // };
-
         let vol = {
             let start_time = Instant::now();
             let vol = repo
@@ -208,8 +211,8 @@ impl<'a> State<'a> {
             let voxel_data: Vec<u16> = vol.voxel_data.iter().map(|x| (*x + 1000) as u16).collect();
             let voxel_data: &[u8] = bytemuck::cast_slice(&voxel_data);
             render_content::RenderContent::from_bytes(
-                &device,
-                &queue,
+                &self.device,
+                &self.queue,
                 voxel_data,
                 "CT Volume",
                 vol.dimensions.0 as u32,
@@ -218,36 +221,16 @@ impl<'a> State<'a> {
             ).unwrap()
         };
 
+        let transverse_view = TransverseView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (0, 0), (900, 900));
+        let sagittal_view = SagittalView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 0), (300, 300));
+        let coronal_view = CoronalView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 300), (300, 300));
+        let oblique_view = ObliqueView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 600), (300, 300));
 
-        println!("supported texture formats: {:?}", surface_caps.formats);
-        println!("format: {:?}", config.format);
+        self.layout.add_view(Box::new(transverse_view));
+        self.layout.add_view(Box::new(sagittal_view));
+        self.layout.add_view(Box::new(coronal_view));
+        self.layout.add_view(Box::new(oblique_view));
 
-        let transverse_view = TransverseView::new(&device, &texture, 0.00, 0.005 / 2.0, &vol, (0, 0), (900, 900));
-        let sagittal_view = SagittalView::new(&device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 0), (300, 300));
-        let coronal_view = CoronalView::new(&device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 300), (300, 300));
-        let oblique_view = ObliqueView::new(&device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 600), (300, 300));
-
-        let mut layout = Layout::new((800, 800));
-        layout.add_view(Box::new(transverse_view));
-        layout.add_view(Box::new(sagittal_view));
-        layout.add_view(Box::new(coronal_view));
-        layout.add_view(Box::new(oblique_view));
-
-
-        Self {
-            surface,
-            device,
-            queue,
-            config,
-            size,
-            window,
-            texture,
-            // transverse_view,
-            // sagittal_view,
-            // coronal_view,
-            // oblique_view,
-            layout,
-        }
     }
 
     fn window(&self) -> &Window {
@@ -269,13 +252,6 @@ impl<'a> State<'a> {
     }
 
     fn update(&mut self) {
-        // for i in 0..self.transverse_view.len() {
-        //     self.transverse_view[i].update(&self.queue);
-        // }
-        // self.transverse_view.update(&self.queue);
-        // self.sagittal_view.update(&self.queue);
-        // self.coronal_view.update(&self.queue);
-        // self.oblique_view.update(&self.queue);
         self.layout.update(&self.queue);
     }
 
@@ -310,13 +286,6 @@ impl<'a> State<'a> {
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
-            // for i in 0..self.transverse_view.len() {
-            //     self.transverse_view[i].render(&mut render_pass)?;
-            // }
-            // self.transverse_view.render(&mut render_pass)?;
-            // self.sagittal_view.render(&mut render_pass)?;
-            // self.coronal_view.render(&mut render_pass)?;
-            // self.oblique_view.render(&mut render_pass)?;
 
             self.layout.render(&mut render_pass)?;
         }
@@ -326,6 +295,7 @@ impl<'a> State<'a> {
         Ok(())
     }
 }
+
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 #[cfg(target_arch = "wasm32")]
@@ -377,6 +347,17 @@ pub async fn run() {
 
     // State::new uses async code, so we're going to wait for it to finish
     let mut state = State::new(&window).await;
+
+    {
+        let seconds = 5;
+        println!("Waiting for {} seconds...", seconds);
+        // Sleep for `seconds` seconds (non-blocking)
+        tokio::time::sleep(std::time::Duration::from_secs(seconds)).await;
+
+        // Call the delayed function after the sleep
+        state.load_data().await;
+    }
+
     let mut surface_configured = false;
 
     log::info!("Starting the event loop ...");
