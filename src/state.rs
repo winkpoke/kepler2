@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{fs, io, time::Instant};
 use std::path::{Path, PathBuf};
 use log::{debug, error, info, warn};
@@ -10,6 +11,12 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
+use once_cell::sync::{OnceCell, Lazy};
+#[cfg(target_arch = "wasm32")]
+use async_lock::Mutex;
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::sync::Mutex;
+
 
 use crate::view::{CoronalView, Layout, ObliqueView, Renderable, SagittalView, TransverseView};
 use crate::ct_volume::*;
@@ -34,11 +41,14 @@ fn list_files_in_directory(dir: &str) -> io::Result<Vec<PathBuf>> {
     Ok(file_paths)
 }
 
+static STATE: Lazy<Arc<Mutex<Option<State>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-pub struct State<'a> {
-    pub(crate) surface: wgpu::Surface<'a>,
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
+pub struct State {
+    pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) config: wgpu::SurfaceConfiguration,
@@ -46,12 +56,21 @@ pub struct State<'a> {
     // The window must be declared after the surface so
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
-    window: &'a Window,
+    window: &'static Window,
     pub(crate) layout: Layout,
 }
 
-impl<'a> State<'a> {
-    pub async fn new(window: &'a Window) -> State<'a> {
+impl State {
+    pub async fn get_instance() -> Arc<Mutex<Option<State>>> {
+            once_cell::sync::Lazy::<Arc<Mutex<Option<State>>>>::get(&STATE).unwrap().clone()
+        }
+
+    pub async fn set_instance(new_state: State) {
+            let mut state = STATE.lock().await;
+            *state = Some(new_state);
+        }
+
+    pub async fn initialize(window: &'static Window) {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -141,7 +160,7 @@ impl<'a> State<'a> {
         
         let layout = Layout::new((800, 800));
 
-        Self {
+        let state = Self {
             surface,
             device,
             queue,
@@ -149,7 +168,8 @@ impl<'a> State<'a> {
             size,
             window,
             layout,
-        }
+        };
+        Self::set_instance(state).await;
     }
 
     #[cfg(not(target_arch = "wasm32"))]

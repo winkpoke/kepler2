@@ -1,6 +1,8 @@
 #![feature(duration_millis_float)]
 
 use log::{debug, error, info, warn};
+use std::sync::Arc;
+use std::sync::LazyLock;
 
 // use wgpu::util::DeviceExt;
 use winit::{
@@ -33,9 +35,12 @@ use state::*;
 use std::time::Instant;
 
 #[cfg(target_arch = "wasm32")]
+use async_lock::Mutex;
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::sync::Mutex;
+
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-
-
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 #[cfg(target_arch = "wasm32")]
@@ -46,14 +51,6 @@ pub async fn init() {
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub async fn run() {
-    // cfg_if::cfg_if! {
-    //     if #[cfg(target_arch = "wasm32")] {
-    //         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    //         console_log::init_with_level(log::Level::Info).expect("Couldn't initialize logger");
-    //     } else {
-    //         env_logger::init();
-    //     }
-    // }
     #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
 
@@ -67,7 +64,6 @@ pub async fn run() {
         // Winit prevents sizing with CSS, so we have to set
         // the size manually when on web.
         use winit::dpi::PhysicalSize;
-
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()
             .and_then(|win| win.document())
@@ -86,7 +82,10 @@ pub async fn run() {
     let _ = window.request_inner_size(PhysicalSize::new(1200, 900));
 
     // State::new uses async code, so we're going to wait for it to finish
-    let mut state = State::new(&window).await;
+    State::initialize(Box::leak(Box::new(window))).await;
+    let state_instance = State::get_instance().await;
+    let mut state_guard = state_instance.lock().await;
+    let mut state = state_guard.as_mut().unwrap();
 
     {
         let seconds = 5;
@@ -101,64 +100,62 @@ pub async fn run() {
     let mut surface_configured = false;
 
     log::info!("Starting the event loop ...");
-    event_loop
-        .run(move |event, control_flow| {
-            match event {
-                Event::WindowEvent {
-                    ref event,
-                    window_id,
-                } if window_id == state.window().id() => {
-                    if !state.input(event) {
-                        // UPDATED!
-                        match event {
-                            WindowEvent::CloseRequested
-                            | WindowEvent::KeyboardInput {
-                                event:
-                                    KeyEvent {
-                                        state: ElementState::Pressed,
-                                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                                        ..
-                                    },
-                                ..
-                            } => control_flow.exit(),
-                            WindowEvent::Resized(physical_size) => {
-                                log::info!("physical_size: {physical_size:?}");
-                                surface_configured = true;
-                                state.resize(*physical_size);
-                            }
-                            WindowEvent::RedrawRequested => {
-                                // This tells winit that we want another frame after this one
-                                state.window().request_redraw();
-
-                                if !surface_configured {
-                                    return;
-                                }
-
-                                state.update();
-                                match state.render() {
-                                    Ok(_) => {}
-                                    // Reconfigure the surface if it's lost or outdated
-                                    Err(
-                                        wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated,
-                                    ) => state.resize(state.size),
-                                    // The system is out of memory, we should probably quit
-                                    Err(wgpu::SurfaceError::OutOfMemory) => {
-                                        log::error!("OutOfMemory");
-                                        control_flow.exit();
-                                    }
-
-                                    // This happens when the a frame takes too long to present
-                                    Err(wgpu::SurfaceError::Timeout) => {
-                                        log::warn!("Surface timeout")
-                                    }
-                                }
-                            }
-                            _ => {}
+    event_loop.run(move |event, control_flow| {
+        match event {
+            Event::WindowEvent {
+                ref event,
+                window_id,
+            } if window_id == state.window().id() => {
+                if !state.input(event) {
+                    // UPDATED!
+                    match event {
+                        WindowEvent::CloseRequested
+                        | WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    state: ElementState::Pressed,
+                                    physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                    ..
+                                },
+                            ..
+                        } => control_flow.exit(),
+                        WindowEvent::Resized(physical_size) => {
+                            log::info!("physical_size: {physical_size:?}");
+                            surface_configured = true;
+                            state.resize(*physical_size);
                         }
+                        WindowEvent::RedrawRequested => {
+                            // This tells winit that we want another frame after this one
+                            state.window().request_redraw();
+
+                            if (!surface_configured) {
+                                return;
+                            }
+
+                            state.update();
+                            match state.render() {
+                                Ok(_) => {}
+                                // Reconfigure the surface if it's lost or outdated
+                                Err(
+                                    wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated,
+                                ) => state.resize(state.size),
+                                // The system is out of memory, we should probably quit
+                                Err(wgpu::SurfaceError::OutOfMemory) => {
+                                    log::error!("OutOfMemory");
+                                    control_flow.exit();
+                                }
+
+                                // This happens when the a frame takes too long to present
+                                Err(wgpu::SurfaceError::Timeout) => {
+                                    log::warn!("Surface timeout")
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
-                _ => {}
             }
-        })
-        .unwrap();
+            _ => {}
+        }
+    }).unwrap();
 }
