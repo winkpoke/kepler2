@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::Arc;
 use std::{fs, io, time::Instant};
 use std::path::{Path, PathBuf};
@@ -11,7 +12,8 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
-use once_cell::sync::{OnceCell, Lazy};
+use once_cell::sync::Lazy;
+use std::cell::{LazyCell, OnceCell, RefCell};
 #[cfg(target_arch = "wasm32")]
 use async_lock::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
@@ -41,7 +43,11 @@ fn list_files_in_directory(dir: &str) -> io::Result<Vec<PathBuf>> {
     Ok(file_paths)
 }
 
-static STATE: Lazy<Arc<Mutex<Option<State>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+// static STATE: Lazy<Arc<Mutex<Option<State>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+
+thread_local! {
+    static STATE: OnceCell<Rc<RefCell<State>>> = OnceCell::new();
+}
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -61,14 +67,19 @@ pub struct State {
 }
 
 impl State {
-    pub async fn get_instance() -> Arc<Mutex<Option<State>>> {
-            once_cell::sync::Lazy::<Arc<Mutex<Option<State>>>>::get(&STATE).unwrap().clone()
-        }
+    pub async fn get_instance() -> Rc<RefCell<State>> {
+        STATE.with(|state| {
+            state.get().map(|s| s.clone()).unwrap()
+        })
+    }
 
     pub async fn set_instance(new_state: State) {
-            let mut state = STATE.lock().await;
-            *state = Some(new_state);
-        }
+        STATE.with(|state| {
+            if let Err(_) = state.set(Rc::new(RefCell::new(new_state))) {
+                panic!("Error when setting the State value");
+            }
+        });
+    }
 
     pub async fn initialize(window: &'static Window) {
         let size = window.inner_size();
