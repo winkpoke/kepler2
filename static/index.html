@@ -24,6 +24,7 @@
     <script type="module">
         import init from '../pkg/kepler_wgpu.js';
         let wasm = await init();
+        
         let series_id;
         let fileLists = [];
 
@@ -38,6 +39,7 @@
             treeContainer.appendChild(createTree(patient_list));
 
         })
+        await wasm.run();
 
         function get_tree(fileArray) {
             return new Promise(async (resolve, reject) => {
@@ -118,9 +120,16 @@
                         }
                     });
                 }else {
-                    toggle.addEventListener('click', () => {
+                    toggle.addEventListener('click', async() => {
                         series_id = toggle.innerHTML;
                         console.log(series_id);
+                        let repo =  await wasm.parse_dcm_files_wasm(fileLists);
+                        console.log(repo);
+                        let res = await repo.get_images_by_series(series_id);
+                        console.log(res);
+                        console.log(wasm.load_data_from_repo_wasm);
+                        wasm.load_data_from_repo_wasm(series_id);
+                        
                     })
                 }
 

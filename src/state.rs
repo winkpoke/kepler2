@@ -23,6 +23,7 @@ use tokio::sync::Mutex;
 use crate::view::{CoronalView, Layout, ObliqueView, Renderable, SagittalView, TransverseView};
 use crate::ct_volume::*;
 use crate::dicom::*;
+use crate::render_content::RenderContent;
 
 
 
@@ -52,7 +53,7 @@ thread_local! {
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct State {
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) device: wgpu::Device,
@@ -185,8 +186,6 @@ impl State {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn load_data(&mut self) {
-        use crate::render_content::RenderContent;
-
         let repo = {
             // Start the timer
             let start_time = Instant::now();
@@ -211,45 +210,7 @@ impl State {
             );
             repo
         };
-
-        let vol = {
-            let start_time = Instant::now();
-            let vol = repo
-                .generate_ct_volume("1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561")
-                .unwrap();
-            let elapsed_time = start_time.elapsed();
-            println!(
-                "CTVolume being generated in {:.1} ms.",
-                elapsed_time.as_millis_f32()
-            );
-            println!("CT Volume:\n{:#?}", vol);
-            vol
-        };
-
-        let texture = {
-            let voxel_data: Vec<u16> = vol.voxel_data.iter().map(|x| (*x + 1000) as u16).collect();
-            let voxel_data: &[u8] = bytemuck::cast_slice(&voxel_data);
-            RenderContent::from_bytes(
-                &self.device,
-                &self.queue,
-                voxel_data,
-                "CT Volume",
-                vol.dimensions.0 as u32,
-                vol.dimensions.1 as u32,
-                vol.dimensions.2 as u32,
-            ).unwrap()
-        };
-
-        let transverse_view = TransverseView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (0, 0), (900, 900));
-        let sagittal_view = SagittalView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 0), (300, 300));
-        let coronal_view = CoronalView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 300), (300, 300));
-        let oblique_view = ObliqueView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 600), (300, 300));
-
-        self.layout.add_view(Box::new(transverse_view));
-        self.layout.add_view(Box::new(sagittal_view));
-        self.layout.add_view(Box::new(coronal_view));
-        self.layout.add_view(Box::new(oblique_view));
-
+        self.load_data_from_repo(&repo, "1.2.392.200036.9116.2.5.1.144.3437232930.1426478676.964561");
     }
 
     pub fn window(&self) -> &Window {
@@ -313,4 +274,61 @@ impl State {
 
         Ok(())
     }
+
+    pub fn load_data_from_repo(&mut self, repo: &DicomRepo, image_series_number: &str) {
+        let vol = {
+            let start_time = Instant::now();
+            let vol = repo
+                .generate_ct_volume(image_series_number)
+                .unwrap();
+            let elapsed_time = start_time.elapsed();
+            println!(
+                "CTVolume being generated in {:.1} ms.",
+                elapsed_time.as_millis_f32()
+            );
+            println!("CT Volume:\n{:#?}", vol);
+            vol
+        };
+        let texture = {
+            let voxel_data: Vec<u16> = vol.voxel_data.iter().map(|x| (*x + 1000) as u16).collect();
+            let voxel_data: &[u8] = bytemuck::cast_slice(&voxel_data);
+            RenderContent::from_bytes(
+                &self.device,
+                &self.queue,
+                voxel_data,
+                "CT Volume",
+                vol.dimensions.0 as u32,
+                vol.dimensions.1 as u32,
+                vol.dimensions.2 as u32,
+            ).unwrap()
+        };
+    
+        let transverse_view = TransverseView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (0, 0), (900, 900));
+        let sagittal_view = SagittalView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 0), (300, 300));
+        let coronal_view = CoronalView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 300), (300, 300));
+        let oblique_view = ObliqueView::new(&self.device, &texture, 0.00, 0.005 / 2.0, &vol, (900, 600), (300, 300));
+    
+        self.layout.add_view(Box::new(transverse_view));
+        self.layout.add_view(Box::new(sagittal_view));
+        self.layout.add_view(Box::new(coronal_view));
+        self.layout.add_view(Box::new(oblique_view));
+    }
 }
+
+// ---------------------------------------- WASM ---------------------------------------------
+
+#[cfg(target_arch = "wasm32")]
+use js_sys::Array;
+
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[cfg(target_arch = "wasm32")]
+pub fn load_data_from_repo_wasm(/*repo: &DicomRepo,*/ image_series_number: &str) {
+    warn!(".....................");
+    warn!("Image Series Number: {image_series_number}");
+    // let state = State::get_instance().await;
+    // state.borrow_mut().load_data_from_repo(repo, image_series_number);
+}
+
+
+
